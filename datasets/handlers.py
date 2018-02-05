@@ -1,7 +1,8 @@
-from .pascal import PascalVOCSegmentation
-from .transformer import TransformWrapper
-from torchvision.transforms import Compose, ToTensor
-from ..transforms import PILImageLoader
+from datasets.pascal import PascalVOCSegmentation
+from datasets.transformer import TransformWrapper
+from torchvision.transforms import (
+    Compose, ToTensor, Resize, Grayscale)
+from transforms import PILImageLoader
 
 """
 A dataset handler accepts a data directory and mode and returns a
@@ -15,9 +16,12 @@ def _pascal_voc(data_dir, mode, mask):
         PascalVOCSegmentation(data_dir, split=mode, mask=mask),
         transform=Compose([
             PILImageLoader(),
+            Resize((256, 256)),
             ToTensor()]),
         target_transform=Compose([
             PILImageLoader(),
+            Grayscale(),
+            Resize((256, 256)),
             ToTensor()]))
 
 

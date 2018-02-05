@@ -26,7 +26,7 @@ class PascalVOCSegmentation(PascalVOCBase):
             self.root, ground_truth_dirname)
         self.image_dir = os.path.join(self.root, 'JPEGImages')
         self.split_filepath = os.path.join(
-            self.root, 'ImageSets', self.split + '.txt')
+            self.root, 'ImageSets/Segmentation', self.split + '.txt')
         self.image_data = self._parse_image_paths(
             self.image_dir, self.ground_truth_dir, self.split_filepath)
 
@@ -39,7 +39,7 @@ class PascalVOCSegmentation(PascalVOCBase):
         image_data = []
 
         for image_id in image_ids:
-            img_path = os.path.join(image_dir, image_id + '.jpeg')
+            img_path = os.path.join(image_dir, image_id + '.jpg')
             mask_path = os.path.join(ground_truth_dir, image_id + '.png')
             if os.path.exists(img_path) and os.path.exists(mask_path):
                 image_data.append({
@@ -50,7 +50,8 @@ class PascalVOCSegmentation(PascalVOCBase):
         return image_data
 
     def __getitem__(self, index):
-        return self.image_data[index]
+        item = self.image_data[index]
+        return item['image_filepath'], item['gt_filepath']
 
     def __len__(self):
         return len(self.image_data)

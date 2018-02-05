@@ -1,17 +1,23 @@
+import os
+import sys
 import argparse
+import shutil
+
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 
-from .models import SimpleConvNet
+from models import SimpleConvNet
+from metrics import SegmentationMetrics
 import datasets
+from logger import StepLogger
 
 
 parser = argparse.ArgumentParser(description='PyTorch Segmentation Framework')
 parser.add_argument('--data-dir', type=str, required=True,
                     help='Path to the dataset root dir.')
+parser.add_argument('--model-dir', type=str, required=True,
+                    help='Path to store output data.')
 parser.add_argument('--dataset', type=str, required=True,
                     help=('A dataset handler. Required to be defined inside'
                           'datasets.handler module'))
@@ -39,8 +45,41 @@ parser.add_argument('--checkpoint', type=str,
                     help='Load model on checkpoint.')
 
 
+def train(model, loader, criterion, epoch, logger):
+    model.train()
+
+    metrics = SegmentationMetrics(2)
+
+    for step, (data, target) in enumerate(loader):
+        if args.cuda:
+            data, target = data.cuda(), target.cuda()
+
+        data, target = Variable(data), Variable(target)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+
+        metrics_dict = metrics.add(
+            output.data.numpy(),
+            target.data.numpy(),
+            float(loss.data.numpy()[0]))
+
+        if step % args.log_interval == 0:
+            logger.log(step, epoch, loader, data, metrics_dict)
+
 if '__main__' == __name__:
     args = parser.parse_args()
+
+    if os.path.exists(args.model_dir):
+        answer = input("Model dir exists. Do you want to delete it?[y/n]")
+        if answer == 'y':
+            shutil.rmtree(args.model_dir)
+        elif answer != 'n':
+            sys.exit(1)
+
+    os.makedirs(args.model_dir)
 
     # seed torch and cuda
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -52,11 +91,11 @@ if '__main__' == __name__:
     model = SimpleConvNet()
 
     # initialize dataset
-    assert args.dataset in datasets.func.__globals__, (
+    assert args.dataset in datasets.handlers.__dict__, (
         "Handler for dataset {} not available.".format(args.dataset))
 
-    train_dataset = datasets.func.__globals__[args.dataset](
-        args.data_dir, model='train')
+    train_dataset = datasets.handlers.__dict__[args.dataset](
+        args.data_dir, mode='train')
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size,
@@ -66,27 +105,14 @@ if '__main__' == __name__:
     if args.cuda:
         model.cuda()
 
-    optimizer = optim.adam(model.parameters())
+    optimizer = optim.Adam(model.parameters())
 
     criterion = torch.nn.BCELoss()
     if args.cuda:
         criterion = criterion.cuda()
 
-    model.train()
-    for epoch in range(args.epochs):
-        for batch_idx, (data, target) in enumerate(train_loader):
+    log_filepath = os.path.join(args.model_dir, 'out.log')
 
-            if args.cuda:
-                data, target = data.cuda(), target.cuda()
-
-            data, target = Variable(data), Variable(target)
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            loss.backward()
-            optimizer.step()
-
-            if batch_idx % args.log_interval == 0:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    epoch, batch_idx * len(data), len(train_loader.dataset),
-                    100. * batch_idx / len(train_loader), loss.data[0]))
+    with StepLogger(filename=log_filepath) as logger:
+        for epoch in range(args.epochs):
+            train(model, train_loader, criterion, epoch, logger)
