@@ -20,8 +20,8 @@ class PascalVOCSegmentation(PascalVOCBase):
         super().__init__(root, *args, **kwargs)
 
         ground_truth_dirname = {
-            'class': 'SegmentationClass',
-            'object': 'SegmentationObject'}[mask]
+            'class': 'SegmentationClassLabels',
+            'object': 'SegmentationObjectLabels'}[mask]
         self.ground_truth_dir = os.path.join(
             self.root, ground_truth_dirname)
         self.image_dir = os.path.join(self.root, 'JPEGImages')

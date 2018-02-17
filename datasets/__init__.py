@@ -1,2 +1,2 @@
-from .pascal import PascalVOCSegmentation
+from .pascal.pascal import PascalVOCSegmentation
 from .handlers import *

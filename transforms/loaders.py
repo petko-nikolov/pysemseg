@@ -12,4 +12,3 @@ class PILImageLoader():
 class CV2ImageLoader():
     def __call__(self, path):
         return cv2.imread(path)
-
