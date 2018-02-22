@@ -1,1 +1,2 @@
 tqdm==4.19.5
+tensorboardX==1.1

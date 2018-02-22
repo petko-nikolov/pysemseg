@@ -13,39 +13,46 @@ from metrics import SegmentationMetrics, flatten_metrics
 from evaluate import evaluate
 
 import datasets
-from utils import prompt_delete_dir
+from utils import prompt_delete_dir, restore
 from logger import StepLogger
 
-parser = argparse.ArgumentParser(description='PyTorch Segmentation Framework')
-parser.add_argument('--data-dir', type=str, required=True,
-                    help='Path to the dataset root dir.')
-parser.add_argument('--model-dir', type=str, required=True,
-                    help='Path to store output data.')
-parser.add_argument('--dataset', type=str, required=True,
-                    help=('A dataset handler. Required to be defined inside'
-                          'datasets.handler module'))
-parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                    help='input batch size for training (default: 64)')
-parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                    help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                    help='learning rate (default: 0.01)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                    help='how many batches to wait before logging training status')
-parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
-parser.add_argument('--num-workers', type=int, default=1,
-                    help='Number of CPU data workers')
-parser.add_argument('--evaluate-frequency', type=int, default=1000,
-                    required=False, help='how often to evaluate the model')
-parser.add_argument('--checkpoint', type=str,
-                    required=False,
-                    help='Load model on checkpoint.')
+
+def define_args():
+    parser = argparse.ArgumentParser(description='PyTorch Segmentation Framework')
+    parser.add_argument('--data-dir', type=str, required=True,
+                        help='Path to the dataset root dir.')
+    parser.add_argument('--model-dir', type=str, required=True,
+                        help='Path to store output data.')
+    parser.add_argument('--dataset', type=str, required=True,
+                        help=('A dataset handler. Required to be defined inside'
+                              'datasets.handler module'))
+    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
+                        help='input batch size for training (default: 64)')
+    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+                        help='input batch size for testing (default: 1000)')
+    parser.add_argument('--epochs', type=int, default=10, metavar='N',
+                        help='number of epochs to train (default: 10)')
+    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
+                        help='learning rate (default: 0.01)')
+    parser.add_argument('--no-cuda', action='store_true', default=False,
+                        help='disables CUDA training')
+    parser.add_argument('--seed', type=int, default=1, metavar='S',
+                        help='random seed (default: 1)')
+    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                        help='how many batches to wait before logging training status')
+    parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
+    parser.add_argument('--num-workers', type=int, default=1,
+                        help='Number of CPU data workers')
+    parser.add_argument('--evaluate-frequency', type=int, default=1000,
+                        required=False, help='how often to evaluate the model')
+    parser.add_argument('--checkpoint', type=str,
+                        required=False,
+                        help='Load model on checkpoint.')
+    parser.add_argument('--weights', type=str, required=False,
+                        help=('Class weights passed as a JSON object, e.g:'
+                              '{"0": 5.0, "2": 3.0}, missing classes get'
+                              'weight one one'))
+    return parser
 
 
 def save(model, optimizer, model_dir, epoch, args):
@@ -60,19 +67,12 @@ def save(model, optimizer, model_dir, epoch, args):
         os.path.join(model_dir, 'checkpoint-{}'.format(epoch)))
 
 
-def restore(checkpoint_path, model, optimizer):
-    checkpoint = torch.load(checkpoint_path)
-    model.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    return checkpoint['epoch']
-
-
 def train_epoch(
         model, loader, criterion, optimizer, epoch, logger,
         summary_writer):
     model.train()
 
-    metrics = SegmentationMetrics(256)
+    metrics = SegmentationMetrics(loader.dataset.number_of_classes)
 
     for step, (data, target) in enumerate(loader):
         if args.cuda:
@@ -99,6 +99,17 @@ def train_epoch(
                     "train/{}".format(k), v, step)
             metrics_dict.pop('class')
             logger.log(step, epoch, loader, data, metrics_dict)
+
+
+def get_class_weights(weights_json_str, n_classes, cuda=False):
+    weights_obj = json.loads(weights_json_str)
+    weights = np.ones(n_classes, dtype=np.float32)
+    for k, v in weights_obj.items():
+        weights[int(k)] = v
+    weights = torch.FloatTensor(weights)
+    if cuda:
+        weights = weights.cuda()
+    return weights
 
 
 def train(args):
@@ -138,7 +149,7 @@ def train(args):
     summary_writer = SummaryWriter(log_dir=args.model_dir)
 
     # initialize model
-    model = SimpleConvNet(n_classes=256)
+    model = SimpleConvNet(n_classes=train_dataset.number_of_classes)
 
     # transfer to cuda
     if args.cuda:
@@ -150,23 +161,29 @@ def train(args):
     if args.checkpoint:
         start_epoch = restore(args.checkpoint, model, optimizer)
 
-    criterion = torch.nn.NLLLoss()
+    weights = None
+    if args.weights:
+        weights = get_class_weights(
+            args.weights, train_dataset.number_of_classes)
+
+    criterion = torch.nn.NLLLoss(weight=weights)
     if args.cuda:
         criterion = criterion.cuda()
 
     log_filepath = os.path.join(args.model_dir, 'train.log')
 
     with StepLogger(filename=log_filepath) as logger:
-        for epoch in range(start_epoch, args.epochs):
+        for epoch in range(start_epoch, start_epoch + args.epochs):
             train_epoch(
                 model, train_loader, criterion, optimizer, epoch, logger,
                 summary_writer)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
-                summary_writer)
-            save(model, optimizer, args.model_dir, epoch)
+                summary_writer, 'val')
+            save(model, optimizer, args.model_dir, epoch, args)
 
 
 if '__main__' == __name__:
+    parser = define_args()
     args = parser.parse_args()
     train(args)

@@ -23,7 +23,8 @@ def _pascal_voc(data_dir, mode, mask):
             CV2ImageLoader(),
             Grayscale(),
             Resize((256, 256)),
-            ToCategoryTensor()]))
+            ToCategoryTensor()]),
+        mode=mode)
 
 
 def pascal_voc_class(data_dir, mode):

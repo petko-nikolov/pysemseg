@@ -14,6 +14,10 @@ class PascalVOCBase(Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
+    @property
+    def number_of_classes(self):
+        return 256
+
 
 class PascalVOCSegmentation(PascalVOCBase):
     def __init__(self, root, mask='class', *args, **kwargs):
@@ -30,8 +34,7 @@ class PascalVOCSegmentation(PascalVOCBase):
         self.image_data = self._parse_image_paths(
             self.image_dir, self.ground_truth_dir, self.split_filepath)
 
-    @classmethod
-    def _parse_image_paths(cls, image_dir, ground_truth_dir, split_filepath):
+    def _parse_image_paths(self, image_dir, ground_truth_dir, split_filepath):
 
         with open(split_filepath) as split_file:
             image_ids = [l.strip() for l in split_file]
@@ -41,17 +44,19 @@ class PascalVOCSegmentation(PascalVOCBase):
         for image_id in image_ids:
             img_path = os.path.join(image_dir, image_id + '.jpg')
             mask_path = os.path.join(ground_truth_dir, image_id + '.png')
-            if os.path.exists(img_path) and os.path.exists(mask_path):
+            if os.path.exists(img_path):
                 image_data.append({
                     'id': image_id,
                     'image_filepath': img_path,
-                    'gt_filepath': mask_path
+                    'gt_filepath':  (
+                        mask_path if os.path.exists(mask_path) else None)
                 })
         return image_data
 
     def __getitem__(self, index):
         item = self.image_data[index]
-        return item['image_filepath'], item['gt_filepath']
+        return item['id'], item['image_filepath'], item['gt_filepath']
 
     def __len__(self):
-        return len(self.image_data)
+        return 4
+        # return len(self.image_data)
