@@ -8,7 +8,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 
-from models import SimpleConvNet
+from models import SimpleConvNet, UNet
 from metrics import SegmentationMetrics, flatten_metrics
 from evaluate import evaluate
 
@@ -74,7 +74,7 @@ def train_epoch(
 
     metrics = SegmentationMetrics(loader.dataset.number_of_classes)
 
-    for step, (data, target) in enumerate(loader):
+    for step, (ids, data, target) in enumerate(loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
 
@@ -149,7 +149,7 @@ def train(args):
     summary_writer = SummaryWriter(log_dir=args.model_dir)
 
     # initialize model
-    model = SimpleConvNet(n_classes=train_dataset.number_of_classes)
+    model = UNet(in_channels=3, n_classes=train_dataset.number_of_classes)
 
     # transfer to cuda
     if args.cuda:
@@ -179,7 +179,7 @@ def train(args):
                 summary_writer)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
-                summary_writer, 'val')
+                summary_writer)
             save(model, optimizer, args.model_dir, epoch, args)
 
 

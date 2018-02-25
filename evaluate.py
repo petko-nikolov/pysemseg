@@ -1,7 +1,6 @@
 import numpy as np
 from torch.autograd import Variable
 from metrics import SegmentationMetrics, flatten_metrics
-import tqdm
 
 
 def evaluate(
@@ -9,7 +8,7 @@ def evaluate(
     model.eval()
 
     metrics = SegmentationMetrics(loader.dataset.number_of_classes)
-    for _, (data, target) in enumerate(loader):
+    for _, (_, data, target) in enumerate(loader):
         if cuda:
             data, target = data.cuda(), target.cuda()
 
@@ -37,4 +36,3 @@ def evaluate(
                 "validation/{}".format(k), v, epoch)
 
     return predictions
-

@@ -85,9 +85,9 @@ def test(args):
             output = output.data.numpy()
             predictions = np.argmax(output, axis=2)
 
-            for i in range(len(ids)):
+            for example_id, prediction in zip(ids, predictions):
                 np.savez(
-                    os.path.join(args.output_dir, ids[i]), predictions[i])
+                    os.path.join(args.output_dir, example_id), prediction)
 
             pbar.update(output.shape[0])
 
