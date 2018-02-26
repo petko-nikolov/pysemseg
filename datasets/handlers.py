@@ -1,8 +1,9 @@
 from datasets.pascal import PascalVOCSegmentation
+from datasets.jazz import JazzSegmentationDataset
 from datasets.transformer import TransformWrapper
 from torchvision.transforms import Compose
 from transforms import (
-    CV2ImageLoader, Grayscale, Resize, ToCategoryTensor, ToTensor)
+    CV2ImageLoader, Grayscale, Resize, ToCategoryTensor, ToTensor, Binarize)
 
 
 """
@@ -33,3 +34,18 @@ def pascal_voc_class(data_dir, mode):
 
 def pascal_voc_object(data_dir, mode):
     return _pascal_voc(data_dir, mode, 'object')
+
+
+def jazz(data_dir, mode):
+    return TransformWrapper(
+        JazzSegmentationDataset(data_dir, mode=mode),
+        transform=Compose([
+            CV2ImageLoader(),
+            Resize((256, 256)),
+            ToTensor()]),
+        target_transform=Compose([
+            CV2ImageLoader(grayscale=True),
+            Resize((256, 256)),
+            Binarize(127),
+            ToCategoryTensor(remap={255: 1})]),
+        mode=mode)

@@ -9,7 +9,13 @@ class Grayscale:
 
 
 class ToCategoryTensor:
+    def __init__(self, remap=None):
+        self.remap = remap
+
     def __call__(self, image):
+        if self.remap:
+            for k, v in self.remap.items():
+                image[image == k] = v
         return torch.LongTensor(image)
 
 

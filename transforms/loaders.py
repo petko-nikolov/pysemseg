@@ -10,5 +10,10 @@ class PILImageLoader():
 
 
 class CV2ImageLoader():
+    def __init__(self, grayscale=False):
+        self.grayscale = grayscale
+
     def __call__(self, path):
+        if self.grayscale:
+            return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         return cv2.imread(path)
