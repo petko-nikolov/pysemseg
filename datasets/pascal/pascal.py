@@ -58,5 +58,4 @@ class PascalVOCSegmentation(PascalVOCBase):
         return item['id'], item['image_filepath'], item['gt_filepath']
 
     def __len__(self):
-        return 4
-        # return len(self.image_data)
+        return len(self.image_data)

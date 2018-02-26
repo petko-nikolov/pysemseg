@@ -21,3 +21,7 @@ def restore(checkpoint_path, model, optimizer=None):
     return checkpoint['epoch']
 
 
+def tensor_to_numpy(tensor):
+    if tensor.is_cuda:
+        tensor = tensor.cpu()
+    return tensor.numpy()

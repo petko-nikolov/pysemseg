@@ -2,6 +2,7 @@ import os
 import argparse
 import json
 import numpy as np
+import time
 
 import torch
 import torch.optim as optim
@@ -13,7 +14,7 @@ from metrics import SegmentationMetrics, flatten_metrics
 from evaluate import evaluate
 
 import datasets
-from utils import prompt_delete_dir, restore
+from utils import prompt_delete_dir, restore, tensor_to_numpy
 from logger import StepLogger
 
 
@@ -78,6 +79,8 @@ def train_epoch(
         if args.cuda:
             data, target = data.cuda(), target.cuda()
 
+        start_time = time.time()
+
         data, target = Variable(data), Variable(target)
         optimizer.zero_grad()
         output = model(data)
@@ -85,13 +88,15 @@ def train_epoch(
         loss.backward()
         optimizer.step()
 
-        output = output.data.numpy()
+        output = tensor_to_numpy(output.data)
         predictions = np.argmax(output, axis=2)
 
         metrics_dict = metrics.add(
             predictions,
-            target.data.numpy(),
-            float(loss.data.numpy()[0]))
+            tensor_to_numpy(target.data),
+            float(tensor_to_numpy(loss.data)[0]))
+
+        metrics_dict['time'] = time.time() - start_time
 
         if step % args.log_interval == 0:
             for k, v in flatten_metrics(metrics_dict).items():
@@ -153,7 +158,7 @@ def train(args):
 
     # transfer to cuda
     if args.cuda:
-        model.cuda()
+        model = model.cuda()
 
     optimizer = optim.Adam(model.parameters())
 
@@ -164,7 +169,7 @@ def train(args):
     weights = None
     if args.weights:
         weights = get_class_weights(
-            args.weights, train_dataset.number_of_classes)
+            args.weights, train_dataset.number_of_classes, args.cuda)
 
     criterion = torch.nn.NLLLoss(weight=weights)
     if args.cuda:
@@ -179,7 +184,7 @@ def train(args):
                 summary_writer)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
-                summary_writer)
+                summary_writer, args.cuda)
             save(model, optimizer, args.model_dir, epoch, args)
 
 

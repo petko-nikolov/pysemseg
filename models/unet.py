@@ -71,6 +71,8 @@ class UNet(nn.Module):
             UpLayer(256, 128),
             UpLayer(128, 64, upsample=False)
         ]
+        self.down_layers = nn.ModuleList(self.down_layers)
+        self.up_layers = nn.ModuleList(self.up_layers)
         self.conv_classes = nn.Conv2d(64, n_classes, kernel_size=1)
 
     def forward(self, x):

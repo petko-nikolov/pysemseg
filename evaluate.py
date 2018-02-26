@@ -1,6 +1,7 @@
 import numpy as np
 from torch.autograd import Variable
 from metrics import SegmentationMetrics, flatten_metrics
+from utils import tensor_to_numpy
 
 
 def evaluate(
@@ -16,13 +17,13 @@ def evaluate(
         output = model(data)
         loss = criterion(output, target)
 
-        output = output.data.numpy()
+        output = tensor_to_numpy(output.data)
         predictions = np.argmax(output, axis=2)
 
         metrics.add(
             predictions,
-            target.data.numpy(),
-            float(loss.data.numpy()[0]))
+            tensor_to_numpy(target.data),
+            float(tensor_to_numpy(loss.data)[0]))
 
     metrics_dict = flatten_metrics(metrics.metrics())
 
