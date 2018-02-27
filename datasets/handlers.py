@@ -1,10 +1,10 @@
 from datasets.pascal import PascalVOCSegmentation
 from datasets.jazz import JazzSegmentationDataset
 from datasets.transformer import TransformWrapper
-from torchvision.transforms import Compose
+from torchvision.transforms import Compose, Normalize
 from transforms import (
-    CV2ImageLoader, Grayscale, Resize, ToCategoryTensor, ToTensor, Binarize)
-
+    CV2ImageLoader, Grayscale, Resize, ToCategoryTensor, ToTensor, Binarize,
+    RandomContrast, RandomBrightness, RandomHueSaturation, ToFloatImage)
 
 """
 A dataset handler accepts a data directory and mode and returns a
@@ -42,7 +42,12 @@ def jazz(data_dir, mode):
         transform=Compose([
             CV2ImageLoader(),
             Resize((256, 256)),
-            ToTensor()]),
+            ToFloatImage(),
+            RandomContrast(0.8, 1.2),
+            RandomBrightness(-0.3, 0.3),
+            RandomHueSaturation((-0.05, 0.05), (-0.15, 0.15)),
+            ToTensor(),
+            Normalize(-1.0, 1.0)]),
         target_transform=Compose([
             CV2ImageLoader(grayscale=True),
             Resize((256, 256)),

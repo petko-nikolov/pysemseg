@@ -9,17 +9,20 @@ import torch.optim as optim
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 
-from models import SimpleConvNet, UNet
 from metrics import SegmentationMetrics, flatten_metrics
 from evaluate import evaluate
 
 import datasets
-from utils import prompt_delete_dir, restore, tensor_to_numpy
+from utils import (
+    prompt_delete_dir, restore, tensor_to_numpy, import_class_module)
 from logger import StepLogger
 
 
 def define_args():
     parser = argparse.ArgumentParser(description='PyTorch Segmentation Framework')
+    parser.add_argument('--model', type=str, required=True,
+                        help=('A path to the model including the module. '
+                              'Should be resolvable'))
     parser.add_argument('--data-dir', type=str, required=True,
                         help='Path to the dataset root dir.')
     parser.add_argument('--model-dir', type=str, required=True,
@@ -154,7 +157,9 @@ def train(args):
     summary_writer = SummaryWriter(log_dir=args.model_dir)
 
     # initialize model
-    model = UNet(in_channels=3, n_classes=train_dataset.number_of_classes)
+    model_class = import_class_module(args.model)
+    model = model_class(
+        in_channels=3, n_classes=train_dataset.number_of_classes)
 
     # transfer to cuda
     if args.cuda:

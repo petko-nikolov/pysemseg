@@ -3,10 +3,11 @@ import torch.nn.functional as F
 
 
 class SimpleConvNet(nn.Module):
-    def __init__(self, n_classes):
+    def __init__(self, in_channels, n_classes):
         super().__init__()
         self.n_classes = n_classes
-        self.conv1 = nn.Conv2d(3, 10, kernel_size=5, padding=(2, 2))
+        self.in_channels = in_channels
+        self.conv1 = nn.Conv2d(in_channels, 10, kernel_size=5, padding=(2, 2))
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5, padding=(2, 2))
         self.conv2_drop = nn.Dropout2d()
         self.fc1 = nn.Conv2d(20, 50, kernel_size=1)

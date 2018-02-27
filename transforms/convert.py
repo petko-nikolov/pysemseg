@@ -30,3 +30,12 @@ class ToTensor:
             image = image / 255.0
         image = np.transpose(image, [2, 0, 1])
         return torch.FloatTensor(image)
+
+
+class ToFloatImage:
+    def __call__(self, image):
+        if image.dtype == np.uint8:
+            return image / 255.
+        elif image.dtype == np.float:
+            return image
+        raise ValueError("Unsupported image type")
