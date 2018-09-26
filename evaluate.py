@@ -18,12 +18,12 @@ def evaluate(
         loss = criterion(output, target)
 
         output = tensor_to_numpy(output.data)
-        predictions = np.argmax(output, axis=2)
+        predictions = np.argmax(output, axis=1)
 
         metrics.add(
             predictions,
             tensor_to_numpy(target.data),
-            float(tensor_to_numpy(loss.data)[0]))
+            float(tensor_to_numpy(loss.data)))
 
     metrics_dict = flatten_metrics(metrics.metrics())
 

@@ -92,21 +92,27 @@ def train_epoch(
         optimizer.step()
 
         output = tensor_to_numpy(output.data)
-        predictions = np.argmax(output, axis=2)
+        predictions = np.argmax(output, axis=1)
 
-        metrics_dict = metrics.add(
+        metrics.add(
             predictions,
             tensor_to_numpy(target.data),
-            float(tensor_to_numpy(loss.data)[0]))
+            float(tensor_to_numpy(loss.data)))
 
-        metrics_dict['time'] = time.time() - start_time
 
         if step % args.log_interval == 0:
-            for k, v in flatten_metrics(metrics_dict).items():
+
+            metrics_dict = metrics.metrics()
+            metrics_dict['time'] = time.time() - start_time
+
+            for k, v in flatten_metrics(metrics.metrics()).items():
                 summary_writer.add_scalar(
                     "train/{}".format(k), v, step)
+
             metrics_dict.pop('class')
             logger.log(step, epoch, loader, data, metrics_dict)
+
+            metrics = SegmentationMetrics(loader.dataset.number_of_classes)
 
 
 def get_class_weights(weights_json_str, n_classes, cuda=False):
@@ -151,7 +157,7 @@ def train(args):
         args.data_dir, mode='val')
 
     validate_loader = torch.utils.data.DataLoader(
-        validate_dataset, batch_size=args.batch_size,
+        validate_dataset, batch_size=args.test_batch_size,
         shuffle=False, num_workers=args.num_workers)
 
     summary_writer = SummaryWriter(log_dir=args.model_dir)

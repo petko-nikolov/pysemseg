@@ -68,7 +68,11 @@ class SegmentationMetrics:
             i: {
                 'recall': recall[i],
                 'precision': precision[i], 'iou': iou[i],
-                'f1': 2 * recall[i] * precision[i] / (recall[i] + precision[i])
+                'f1': (
+                    2 * recall[i] * precision[i] / (recall[i] + precision[i])
+                    if recall[i] + precision[i] > 0.0
+                    else 0.0
+                )
             }
             for i in range(self.num_classes)}
         self.accumulator.update(metrics)

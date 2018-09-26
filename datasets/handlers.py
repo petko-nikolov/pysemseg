@@ -5,12 +5,14 @@ from torchvision.transforms import Compose, Normalize
 from transforms import (
     CV2ImageLoader, Grayscale, Resize, ToCategoryTensor, ToTensor, Binarize,
     RandomContrast, RandomBrightness, RandomHueSaturation, ToFloatImage)
+import cv2
 
 """
 A dataset handler accepts a data directory and mode and returns a
 torch.utils.data.Dataset object
 The accepted values for mode are train, val and test
 """
+
 
 
 def _pascal_voc(data_dir, mode, mask):
@@ -23,7 +25,7 @@ def _pascal_voc(data_dir, mode, mask):
         target_transform=Compose([
             CV2ImageLoader(),
             Grayscale(),
-            Resize((256, 256)),
+            Resize((256, 256), interpolation=cv2.INTER_NEAREST),
             ToCategoryTensor()]),
         mode=mode)
 
