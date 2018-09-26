@@ -23,10 +23,13 @@ class DownLayer(nn.Module):
             nn.Conv2d(in_units, out_units, kernel_size=3))
         self.conv2 = PaddingSameLayer2D(
             nn.Conv2d(out_units, out_units, kernel_size=3))
+        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
+        if self.training:
+            x = self.dropout(x)
         return x
 
 
@@ -38,6 +41,7 @@ class UpLayer(nn.Module):
         self.conv2 = PaddingSameLayer2D(
             nn.Conv2d(out_units, out_units, kernel_size=3))
         self.upsample = upsample
+        self.dropout = nn.Dropout(p=0.5)
         if self.upsample:
             self.conv3 = nn.ConvTranspose2d(
                     out_units, out_units // 2, kernel_size=2, stride=2)
@@ -45,6 +49,8 @@ class UpLayer(nn.Module):
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
+        if self.training:
+            x = self.dropout(x)
         if self.upsample:
             x = F.relu(self.conv3(x))
         return x
