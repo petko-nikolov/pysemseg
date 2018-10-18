@@ -1,6 +1,5 @@
 import pprint
 import json
-import contextlib
 
 
 class StepLogger():

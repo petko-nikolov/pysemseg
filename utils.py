@@ -1,7 +1,7 @@
-import torch
 import shutil
 import sys
 import os
+import torch
 
 
 def prompt_delete_dir(directory):
@@ -14,8 +14,10 @@ def prompt_delete_dir(directory):
             sys.exit(1)
 
 
-def restore(checkpoint_path, model, optimizer=None):
-    checkpoint = torch.load(checkpoint_path)
+def restore(checkpoint_path, model, optimizer=None, restore_cpu=False):
+    checkpoint = torch.load(
+        checkpoint_path,
+        map_location=lambda storage, location: storage if restore_cpu else None)
     model.load_state_dict(checkpoint['state'])
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer'])

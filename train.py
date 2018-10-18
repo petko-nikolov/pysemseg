@@ -6,6 +6,7 @@ import time
 
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 
@@ -36,8 +37,8 @@ def define_args():
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                        help='learning rate (default: 0.01)')
+    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+                        help='learning rate (default: 0.001)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -52,6 +53,9 @@ def define_args():
     parser.add_argument('--checkpoint', type=str,
                         required=False,
                         help='Load model on checkpoint.')
+    parser.add_argument('--save-model-frequency', type=int,
+                        required=False, default=10,
+                        help='Save model checkpoint every nth epoch.')
     parser.add_argument('--weights', type=str, required=False,
                         help=('Class weights passed as a JSON object, e.g:'
                               '{"0": 5.0, "2": 3.0}, missing classes get'
@@ -77,6 +81,7 @@ def train_epoch(
     model.train()
 
     metrics = SegmentationMetrics(loader.dataset.number_of_classes)
+    epoch_metrics = SegmentationMetrics(loader.dataset.number_of_classes)
 
     for step, (ids, data, target) in enumerate(loader):
         if args.cuda:
@@ -91,31 +96,38 @@ def train_epoch(
         loss.backward()
         optimizer.step()
 
+        output = F.softmax(output, dim=1)
         output = tensor_to_numpy(output.data)
         predictions = np.argmax(output, axis=1)
+
+        mean_loss = loss / int(np.prod(target.shape))
 
         metrics.add(
             predictions,
             tensor_to_numpy(target.data),
-            float(tensor_to_numpy(loss.data)))
+            float(tensor_to_numpy(mean_loss.data)))
 
+        epoch_metrics.add(
+            predictions,
+            tensor_to_numpy(target.data),
+            float(tensor_to_numpy(mean_loss.data)))
 
         if step % args.log_interval == 0:
 
             metrics_dict = metrics.metrics()
             metrics_dict['time'] = time.time() - start_time
 
-            for k, v in flatten_metrics(metrics.metrics()).items():
-                summary_writer.add_scalar(
-                    "train/{}".format(k), v, step)
-
             metrics_dict.pop('class')
             logger.log(step, epoch, loader, data, metrics_dict)
 
             metrics = SegmentationMetrics(loader.dataset.number_of_classes)
 
+    for k, v in flatten_metrics(epoch_metrics.metrics()).items():
+        summary_writer.add_scalar(
+            "train/{}".format(k), v, epoch)
 
-def get_class_weights(weights_json_str, n_classes, cuda=False):
+
+def _get_class_weights(weights_json_str, n_classes, cuda=False):
     weights_obj = json.loads(weights_json_str)
     weights = np.ones(n_classes, dtype=np.float32)
     for k, v in weights_obj.items():
@@ -171,18 +183,19 @@ def train(args):
     if args.cuda:
         model = model.cuda()
 
-    optimizer = optim.Adam(model.parameters())
+    # optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.99)
 
     start_epoch = 0
     if args.checkpoint:
-        start_epoch = restore(args.checkpoint, model, optimizer)
+        start_epoch = restore(args.checkpoint, model, optimizer) + 1
 
     weights = None
     if args.weights:
         weights = get_class_weights(
             args.weights, train_dataset.number_of_classes, args.cuda)
 
-    criterion = torch.nn.NLLLoss(weight=weights)
+    criterion = torch.nn.CrossEntropyLoss(weight=weights, reduction='sum')
     if args.cuda:
         criterion = criterion.cuda()
 
@@ -196,7 +209,8 @@ def train(args):
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
                 summary_writer, args.cuda)
-            save(model, optimizer, args.model_dir, epoch, args)
+            if epoch % args.save_model_frequency == 0:
+                save(model, optimizer, args.model_dir, epoch, args)
 
 
 if '__main__' == __name__:
