@@ -1,3 +1,2 @@
-from .pascal.pascal import PascalVOCSegmentation
-from .jazz.jazz import JazzSegmentationDataset
-from .handlers import *
+from .pascal_voc.pascal import PascalVOCSegmentation
+from .handlers import pascal_voc

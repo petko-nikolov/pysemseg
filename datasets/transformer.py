@@ -1,5 +1,4 @@
 from torch.utils.data import Dataset
-import torch
 
 
 class TransformWrapper(Dataset):
@@ -19,7 +18,7 @@ class TransformWrapper(Dataset):
         return example_id, transformed_input, transformed_target
 
     def __len__(self):
-            return self.dataset.__len__()
+        return self.dataset.__len__()
 
     @property
     def number_of_classes(self):
