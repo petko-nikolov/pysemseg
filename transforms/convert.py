@@ -20,14 +20,9 @@ class ToCategoryTensor:
 
 
 class ToTensor:
-    def __init__(self, normalize=True):
-        self.normalize = normalize
-
     def __call__(self, image):
         if len(image.shape) == 2:
             image = np.expand_dims(image, axis=-1)
-        if self.normalize:
-            image = image / 255.0
         image = np.transpose(image, [2, 0, 1])
         return torch.FloatTensor(image)
 

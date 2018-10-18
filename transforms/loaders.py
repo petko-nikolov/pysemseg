@@ -16,4 +16,5 @@ class CV2ImageLoader():
     def __call__(self, path):
         if self.grayscale:
             return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-        return cv2.imread(path)
+        img = cv2.imread(path)
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
