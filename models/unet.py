@@ -44,7 +44,7 @@ class UpLayer(nn.Module):
         self.dropout = nn.Dropout(p=0.5)
         if self.upsample:
             self.conv3 = nn.ConvTranspose2d(
-                    out_units, out_units // 2, kernel_size=2, stride=2)
+                out_units, out_units // 2, kernel_size=2, stride=2)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -94,4 +94,4 @@ class UNet(nn.Module):
             x = torch.cat([x, down_outputs[-(i + 1)]], dim=1)
             x = layer(x)
         x = self.conv_classes(x)
-        return F.log_softmax(x, dim=1)
+        return x
