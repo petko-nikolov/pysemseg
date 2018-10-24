@@ -1,1 +1,1 @@
-from .pascal import PascalVOCSegmentation
+from .pascal import PascalVOCSegmentation, PascalVOCTransform

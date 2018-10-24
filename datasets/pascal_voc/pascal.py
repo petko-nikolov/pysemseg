@@ -1,6 +1,8 @@
 import os
-from abc import ABCMeta, abstractmethod
 from torch.utils.data import Dataset
+from torchvision.transforms import Normalize
+import cv2
+import transforms
 
 
 PASCAL_CLASSES = [
@@ -49,34 +51,12 @@ def _parse_image_paths(image_dir, ground_truth_dir, image_ids):
     return image_data
 
 
-class PascalVOCBase(Dataset, metaclass=ABCMeta):
-    def __init__(
-            self, root, split='train', transform=None,
-            target_transform=None):
+class PascalVOCSegmentation(Dataset):
+    def __init__(self, root, split='train'):
 
         assert split in ['train', 'test', 'val']
-
         self.root = os.path.expanduser(root)
         self.split = split
-        self.transform = transform
-        self.target_transform = target_transform
-
-    @abstractmethod
-    def __getitem__(self, index):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def __len__(self):
-        raise NotImplementedError()
-
-    @property
-    def number_of_classes(self):
-        return 21
-
-
-class PascalVOCSegmentation(PascalVOCBase):
-    def __init__(self, root, *args, **kwargs):
-        super().__init__(root, *args, **kwargs)
 
         benchmark_train_ids = set(
             _read_image_ids(
@@ -135,9 +115,56 @@ class PascalVOCSegmentation(PascalVOCBase):
             'val': self.val_image_data
         }[self.split]
 
+    @property
+    def number_of_classes(self):
+        return 21
+
     def __getitem__(self, index):
         item = self.image_data[index]
         return item['id'], item['image_filepath'], item['gt_filepath']
 
     def __len__(self):
         return len(self.image_data)
+
+
+class PascalVOCTransform:
+    def __init__(self, mode):
+        self.mode = mode
+        self.image_loader = transforms.Compose([
+            transforms.CV2ImageLoader(),
+            transforms.Resize((512, 512)),
+            transforms.ToFloatImage()
+        ])
+
+        self.image_augmentations = transforms.Compose([
+            transforms.RandomHueSaturation(
+                hue_delta=0.05, saturation_scale_range=(0.7, 1.3)),
+            transforms.RandomContrast(0.5, 1.5),
+            transforms.RandomBrightness(-32.0 / 255, 32. / 255)
+        ])
+
+        self.target_loader = transforms.Compose([
+            transforms.CV2ImageLoader(grayscale=True),
+            transforms.Resize((512, 512), interpolation=cv2.INTER_NEAREST)
+        ])
+
+        self.joint_augmentations = transforms.Compose(
+            [transforms.RandomHorizontalFlip()]
+        )
+
+        self.tensor_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225])
+        ])
+
+    def __call__(self, image, target):
+        image = self.image_loader(image)
+        target = self.target_loader(target)
+        if self.mode == 'train':
+            image = self.image_augmentations(image)
+            image, target = self.joint_augmentations(image, target)
+        image = self.tensor_transforms(image)
+        target = transforms.ToCategoryTensor()(target)
+        return image, target

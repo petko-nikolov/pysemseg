@@ -1,24 +1,22 @@
 from torch.utils.data import Dataset
 
 
-class TransformWrapper(Dataset):
+class DatasetTransformer(Dataset):
     def __init__(
-            self, dataset, transform=None, target_transform=None, mode='train'):
+            self, dataset, transform, mode='train'):
         self.dataset = dataset
         self.transform = transform
-        self.target_transform = target_transform
         self.mode = mode
 
     def __getitem__(self, index):
-        example_id, input_image, target_mask = self.dataset[index]
-        transformed_input = self.transform(input_image)
+        example_id, image, mask = self.dataset[index]
+        image, mask = self.transform(image, mask)
         if self.mode == 'test':
-            return example_id, transformed_input
-        transformed_target = self.target_transform(target_mask)
-        return example_id, transformed_input, transformed_target
+            return example_id, image
+        return example_id, image, mask
 
     def __len__(self):
-        return self.dataset.__len__()
+        return len(self.dataset)
 
     @property
     def number_of_classes(self):
