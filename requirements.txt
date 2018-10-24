@@ -5,3 +5,4 @@ opencv-python>=3.4.0.12
 Pillow>=5.0.0
 numpy>=1.14.0
 scikit-image>=0.13.1
+visdom>=0.1.8.5

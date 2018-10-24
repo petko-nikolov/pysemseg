@@ -1,8 +1,8 @@
 import os
 import argparse
 import json
-import numpy as np
 import time
+import numpy as np
 
 import torch
 import torch.optim as optim
@@ -10,12 +10,13 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 
-from metrics import SegmentationMetrics, flatten_metrics
+from metrics import SegmentationMetrics
+from loggers import TensorboardLogger
 from evaluate import evaluate
 
 import datasets
 from utils import (
-    prompt_delete_dir, restore, tensor_to_numpy, import_class_module)
+    prompt_delete_dir, restore, tensor_to_numpy, import_class_module, flatten_dict)
 from logger import StepLogger
 
 
@@ -44,12 +45,12 @@ def define_args():
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
+                        help='logging training status frequency')
+    parser.add_argument('--log-images-interval', type=int, default=200, metavar='N',
+                        help='Frequency of logging images and larger plots')
     parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
     parser.add_argument('--num-workers', type=int, default=1,
                         help='Number of CPU data workers')
-    parser.add_argument('--evaluate-frequency', type=int, default=1000,
-                        required=False, help='how often to evaluate the model')
     parser.add_argument('--checkpoint', type=str,
                         required=False,
                         help='Load model on checkpoint.')
@@ -76,12 +77,14 @@ def save(model, optimizer, model_dir, epoch, args):
 
 
 def train_epoch(
-        model, loader, criterion, optimizer, epoch, logger,
-        summary_writer):
+        model, loader, criterion, optimizer, epoch, console_logger,
+        visual_logger):
     model.train()
 
-    metrics = SegmentationMetrics(loader.dataset.number_of_classes)
-    epoch_metrics = SegmentationMetrics(loader.dataset.number_of_classes)
+    metrics = SegmentationMetrics(
+        loader.dataset.number_of_classes, ignore_index=255)
+    epoch_metrics = SegmentationMetrics(
+        loader.dataset.number_of_classes, ignore_index=255)
 
     for step, (ids, data, target) in enumerate(loader):
         if args.cuda:
@@ -118,13 +121,20 @@ def train_epoch(
             metrics_dict['time'] = time.time() - start_time
 
             metrics_dict.pop('class')
-            logger.log(step, epoch, loader, data, metrics_dict)
+            console_logger.log(step, epoch, loader, data, metrics_dict)
 
             metrics = SegmentationMetrics(loader.dataset.number_of_classes)
 
-    for k, v in flatten_metrics(epoch_metrics.metrics()).items():
-        summary_writer.add_scalar(
-            "train/{}".format(k), v, epoch)
+            visual_logger.log_prediction_images(
+                step,
+                tensor_to_numpy(data.data),
+                tensor_to_numpy(target.data),
+                predictions,
+                name='images',
+                prefix='Train'
+            )
+
+    visual_logger.log_metrics(epoch, epoch_metrics.metrics(), 'Train')
 
 
 def _get_class_weights(weights_json_str, n_classes, cuda=False):
@@ -172,7 +182,7 @@ def train(args):
         validate_dataset, batch_size=args.test_batch_size,
         shuffle=False, num_workers=args.num_workers)
 
-    summary_writer = SummaryWriter(log_dir=args.model_dir)
+    visual_logger = TensorboardLogger(log_directory=args.model_dir)
 
     # initialize model
     model_class = import_class_module(args.model)
@@ -184,7 +194,10 @@ def train(args):
         model = model.cuda()
 
     # optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.99)
+    optimizer = optim.SGD(
+        model.parameters(), lr=args.lr, momentum=0.99, weight_decay=5e-4)
+    torch.optim.lr_scheduler.CosineAnnealingLR
+
 
     start_epoch = 0
     if args.checkpoint:
@@ -192,10 +205,11 @@ def train(args):
 
     weights = None
     if args.weights:
-        weights = get_class_weights(
+        weights = _get_class_weights(
             args.weights, train_dataset.number_of_classes, args.cuda)
 
-    criterion = torch.nn.CrossEntropyLoss(weight=weights, reduction='sum')
+    criterion = torch.nn.CrossEntropyLoss(
+        weight=weights, reduction='sum', ignore_index=255)
     if args.cuda:
         criterion = criterion.cuda()
 
@@ -205,10 +219,10 @@ def train(args):
         for epoch in range(start_epoch, start_epoch + args.epochs):
             train_epoch(
                 model, train_loader, criterion, optimizer, epoch, logger,
-                summary_writer)
+                visual_logger)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
-                summary_writer, args.cuda)
+                visual_logger, args.cuda)
             if epoch % args.save_model_frequency == 0:
                 save(model, optimizer, args.model_dir, epoch, args)
 
