@@ -33,6 +33,25 @@ class Resize:
             image, self.size[::-1], interpolation=self.interpolation)
 
 
+class ResizeBatch:
+    """
+    params:
+        size: (height, width)
+    returns:
+        resized image
+    """
+    def __init__(self, size, interpolation=cv2.INTER_LANCZOS4):
+        self.size = size
+        self.interpolation = interpolation
+        self.resize_op = Resize(size, interpolation=interpolation)
+
+    def __call__(self, images):
+        resized_images = []
+        for i in range(images.shape[0]):
+            resized_images.append(self.resize_op(images[i]))
+        return np.stack(resized_images)
+
+
 class Binarize:
     """
     params:
@@ -116,6 +135,23 @@ class RandomHueSaturation:
         return image
 
 
+class RandomGammaCorrection:
+    def __init__(self, min_gamma=0.75, max_gamma=1.25):
+        self.min_gamma = min_gamma
+        self.max_gamma = max_gamma
+
+    def __call__(self, image):
+        if np.issubdtype(image.dtype, np.floating):
+            image = (image * 255).astype(np.uint8)
+
+        gamma = np.random.uniform(self.min_gamma, self.max_gamma)
+        inv_gamma = 1.0 / gamma
+        table = np.array([((i / 255.0) ** inv_gamma) * 255
+            for i in np.arange(0, 256)]).astype("uint8")
+
+        image = cv2.LUT(image, table)
+        return image / 255.
+
 class RandomHorizontalFlip:
     """
     params:
@@ -131,3 +167,46 @@ class RandomHorizontalFlip:
             image = cv2.flip(image, 1)
             mask = cv2.flip(mask, 1)
         return image, mask
+
+
+class RandomRotate:
+    def __init__(self, max_delta=5.0):
+        self.max_delta = max_delta
+
+    def __call__(self, image, mask):
+        angle = np.random.uniform(-self.max_delta, self.max_delta)
+        image = self._rotate(image, angle)
+        mask = self._rotate(mask, angle, interpolation=cv2.INTER_NEAREST)
+        return image, mask
+
+    def _rotate(self, image, angle, interpolation=cv2.INTER_LANCZOS4):
+        image_center = (image.shape[1] / 2, image.shape[0] / 2)
+        rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+        result = cv2.warpAffine(
+            image, rot_mat, (image.shape[1], image.shape[0]), flags=interpolation,
+            borderMode=cv2.BORDER_REPLICATE)
+        return result
+
+
+class RandomTranslate:
+    def __init__(self, max_percent_delta=0.02):
+        self.max_percent_delta = max_percent_delta
+
+    def __call__(self, image, mask):
+        delta_x = np.random.uniform(-self.max_percent_delta, self.max_percent_delta)
+        delta_y = np.random.uniform(-self.max_percent_delta, self.max_percent_delta)
+        image = self._translate(image, delta_x, delta_y)
+        mask = self._translate(mask, delta_x, delta_y)
+        return image, mask
+
+    def _translate(self, image, delta_x, delta_y):
+        height, width = image.shape[:2]
+        translation_matrix = np.float32([
+            [1, 0, int(width * delta_x)],
+            [0, 1, int(height * delta_y)]
+        ])
+        translated_image = cv2.warpAffine(
+            image, translation_matrix, (width, height),
+            borderMode=cv2.BORDER_REPLICATE
+        )
+        return translated_image

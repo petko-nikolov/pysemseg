@@ -19,5 +19,9 @@ class DatasetTransformer(Dataset):
         return len(self.dataset)
 
     @property
+    def labels(self):
+        return self.dataset.labels
+
+    @property
     def number_of_classes(self):
         return self.dataset.number_of_classes
