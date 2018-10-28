@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 
 from metrics import SegmentationMetrics
-from loggers import TensorboardLogger
+from loggers import TensorboardLogger, VisdomLogger
 from evaluate import evaluate
 
 import datasets
@@ -82,9 +82,14 @@ def train_epoch(
     model.train()
 
     metrics = SegmentationMetrics(
-        loader.dataset.number_of_classes, ignore_index=255)
+        loader.dataset.number_of_classes,
+        loader.dataset.labels,
+        ignore_index=255
+    )
     epoch_metrics = SegmentationMetrics(
-        loader.dataset.number_of_classes, ignore_index=255)
+        loader.dataset.number_of_classes,
+        loader.dataset.labels,
+        ignore_index=255)
 
     for step, (ids, data, target) in enumerate(loader):
         if args.cuda:
@@ -182,7 +187,9 @@ def train(args):
         validate_dataset, batch_size=args.test_batch_size,
         shuffle=False, num_workers=args.num_workers)
 
-    visual_logger = TensorboardLogger(log_directory=args.model_dir)
+    visual_logger = VisdomLogger(log_directory=args.model_dir)
+
+    visual_logger.log_args(args.__dict__)
 
     # initialize model
     model_class = import_class_module(args.model)

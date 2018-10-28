@@ -1,1 +1,2 @@
 from loggers.tensorboard_logger import TensorboardLogger
+from loggers.visdom_logger import VisdomLogger

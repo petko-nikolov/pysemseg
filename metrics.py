@@ -29,7 +29,8 @@ class _Accumulator():
 
 
 class SegmentationMetrics:
-    def __init__(self, num_classes, ignore_index=-1):
+    def __init__(self, num_classes, labels=None, ignore_index=-1):
+        self.labels = dict(enumerate(labels)) if labels else {}
         self.accumulator = _Accumulator()
         self.num_classes = num_classes
         self.ignore_index = ignore_index
@@ -80,9 +81,9 @@ class SegmentationMetrics:
         precision = self._precision(outputs, targets)
         iou = self._iou(outputs, targets)
         metrics['class'] = {
-            i: {
-                'recall': recall[i],
-                'precision': precision[i],
+            self.labels.get(i, i): {
+                # 'recall': recall[i],
+                # 'precision': precision[i],
                 'iou': iou[i],
             }
             for i in range(self.num_classes)}

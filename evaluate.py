@@ -10,7 +10,11 @@ def evaluate(
     model.eval()
 
     metrics = SegmentationMetrics(
-        loader.dataset.number_of_classes, ignore_index=255)
+        loader.dataset.number_of_classes,
+        loader.dataset.labels,
+        ignore_index=255
+    )
+
     for step, (_, data, target) in enumerate(loader):
         if cuda:
             data, target = data.cuda(), target.cuda()
@@ -29,7 +33,7 @@ def evaluate(
             tensor_to_numpy(target.data),
             float(tensor_to_numpy(mean_loss.data)))
 
-        if step % 10:
+        if step % 10 == 0:
             visual_logger.log_prediction_images(
                 step,
                 tensor_to_numpy(data.data),

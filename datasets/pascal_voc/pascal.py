@@ -119,12 +119,16 @@ class PascalVOCSegmentation(Dataset):
     def number_of_classes(self):
         return 21
 
+    @property
+    def labels(self):
+        return PASCAL_CLASSES
+
     def __getitem__(self, index):
         item = self.image_data[index]
         return item['id'], item['image_filepath'], item['gt_filepath']
 
     def __len__(self):
-        return len(self.image_data)
+        return 100
 
 
 class PascalVOCTransform:
