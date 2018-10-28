@@ -142,6 +142,7 @@ disable=print-statement,
         comprehension-escape,
         C0111, # missing docstring
         C0414, # Import alias does not rename original package (useless-import-alias)
+        too-few-public-methods,
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
