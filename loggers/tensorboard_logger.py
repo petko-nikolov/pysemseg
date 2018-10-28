@@ -4,10 +4,17 @@ from utils import flatten_dict, ColorPalette256
 
 
 class TensorboardLogger:
-    def __init__(self, log_directory):
+    def __init__(self, log_directory, name):
         self.log_directory = log_directory
         self.summary_writer = SummaryWriter(self.log_directory)
         self.color_palette = ColorPalette256(256)
+
+    def log_args(self, args_dict):
+        args_text = "\n".join("{}: {}".format(k, v) for k, v in args_dict.items())
+        self.summary_writer.add_text(
+            'Args',
+            text=args_text,
+        )
 
     def log_metrics(self, iteration, metrics, prefix):
         for key, value in flatten_dict(metrics).items():
