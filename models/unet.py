@@ -1,28 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
-class PaddingSameLayer2D(nn.Module):
-    def __init__(self, conv):
-        super().__init__()
-        self.conv = conv
-
-    def forward(self, x):
-        x = F.pad(
-            x,
-            [self.conv.kernel_size[0]//2] * 2 +
-            [self.conv.kernel_size[1]//2] * 2)
-        return self.conv(x)
+from models.layers import PaddingSameConv2d
 
 
 class DownLayer(nn.Module):
     def __init__(self, in_units, out_units):
         super().__init__()
-        self.conv1 = PaddingSameLayer2D(
-            nn.Conv2d(in_units, out_units, kernel_size=3))
-        self.conv2 = PaddingSameLayer2D(
-            nn.Conv2d(out_units, out_units, kernel_size=3))
+        self.conv1 = PaddingSameConv2d(in_units, out_units, kernel_size=3)
+        self.conv2 = PaddingSameConv2d(out_units, out_units, kernel_size=3)
         self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
@@ -36,10 +22,8 @@ class DownLayer(nn.Module):
 class UpLayer(nn.Module):
     def __init__(self, in_units, out_units, upsample=True):
         super().__init__()
-        self.conv1 = PaddingSameLayer2D(
-            nn.Conv2d(in_units, out_units, kernel_size=3))
-        self.conv2 = PaddingSameLayer2D(
-            nn.Conv2d(out_units, out_units, kernel_size=3))
+        self.conv1 = PaddingSameConv2d(in_units, out_units, kernel_size=3)
+        self.conv2 = PaddingSameConv2d(out_units, out_units, kernel_size=3)
         self.upsample = upsample
         self.dropout = nn.Dropout(p=0.5)
         if self.upsample:
@@ -65,10 +49,8 @@ class UNet(nn.Module):
             DownLayer(128, 256),
             DownLayer(256, 512)
         ]
-        self.interface1 = PaddingSameLayer2D(
-            nn.Conv2d(512, 1024, kernel_size=3))
-        self.interface2 = PaddingSameLayer2D(
-            nn.Conv2d(1024, 512, kernel_size=3))
+        self.interface1 = PaddingSameConv2d(512, 1024, kernel_size=3)
+        self.interface2 = PaddingSameConv2d(1024, 512, kernel_size=3)
         self.interface_up = nn.ConvTranspose2d(
             512, 512, kernel_size=2, stride=2)
         self.up_layers = [
