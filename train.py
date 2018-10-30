@@ -55,12 +55,15 @@ def define_args():
                         required=False,
                         help='Load model on checkpoint.')
     parser.add_argument('--save-model-frequency', type=int,
-                        required=False, default=10,
+                        required=False, default=5,
                         help='Save model checkpoint every nth epoch.')
     parser.add_argument('--weights', type=str, required=False,
                         help=('Class weights passed as a JSON object, e.g:'
                               '{"0": 5.0, "2": 3.0}, missing classes get'
                               'weight one one'))
+    parser.add_argument('--allow-missing-keys', action='store_true', default=False,
+                        help='Whether to allow module keys to differ from checkpoint keys'
+                             ' when loading a checkpoint')
     return parser
 
 
@@ -203,12 +206,12 @@ def train(args):
     # optimizer = optim.Adam(model.parameters(), lr=args.lr)
     optimizer = optim.SGD(
         model.parameters(), lr=args.lr, momentum=0.99, weight_decay=5e-4)
-    torch.optim.lr_scheduler.CosineAnnealingLR
 
 
     start_epoch = 0
     if args.checkpoint:
-        start_epoch = restore(args.checkpoint, model, optimizer) + 1
+        start_epoch = restore(
+            args.checkpoint, model, optimizer, strict=not args.allow_missing_keys) + 1
 
     weights = None
     if args.weights:
