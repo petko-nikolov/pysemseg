@@ -27,7 +27,6 @@ class VisdomLogger:
             win='Args',
         )
 
-
     def _update_metric_plots(self, iteration, metrics, prefix):
         for key, value in flatten_dict(metrics).items():
             name = "{}/{}".format(prefix, key)
@@ -43,29 +42,29 @@ class VisdomLogger:
         class_metric_names = list(next(iter(metrics['class'].values())).keys())
         for metric_name in class_metric_names:
             name = '{}/Current/{}'.format(prefix, metric_name)
-            xs = list(metrics['class'].keys())
-            ys = np.array([v[metric_name] for v in metrics['class'].values()])
+            class_names = list(metrics['class'].keys())
+            values = np.array([v[metric_name] for v in metrics['class'].values()])
             self.visdom.bar(
-                ys,
+                values,
                 win=name,
-                opts={'rownames': xs, 'title': name}
+                opts={'rownames': class_names, 'title': name}
             )
 
     def log_metrics(self, iteration, metrics, prefix):
         self._update_metric_plots(iteration, metrics, prefix)
         self._log_current_class_metrics(metrics, prefix)
 
-    def log_prediction_images(self, iteration, image, gt, prediction, name, prefix):
+    def log_prediction_images(self, iteration, image, ground_truth, prediction, name, prefix):
         title = '{}/{}'.format(prefix, name)
-        gt = self.color_palette.encode_color(gt)
+        ground_truth = self.color_palette.encode_color(ground_truth)
         prediction = self.color_palette.encode_color(prediction)
         height = int(IMAGES_WIDTH / image.shape[3] * image.shape[2])
         image = ResizeBatch((height, IMAGES_WIDTH))(image.transpose([0, 2, 3, 1]))
         prediction = ResizeBatch(
             (height, IMAGES_WIDTH), interpolation=cv2.INTER_NEAREST)(prediction)
-        gt = ResizeBatch(
-            (height, IMAGES_WIDTH), interpolation=cv2.INTER_NEAREST)(gt)
-        combined_images = np.concatenate([image, gt, prediction], axis=2)
+        ground_truth = ResizeBatch(
+            (height, IMAGES_WIDTH), interpolation=cv2.INTER_NEAREST)(ground_truth)
+        combined_images = np.concatenate([image, ground_truth, prediction], axis=2)
         self.visdom.images(
             combined_images.transpose([0, 3, 1, 2]),
             nrow=1,
