@@ -128,7 +128,7 @@ class PascalVOCSegmentation(Dataset):
         return item['id'], item['image_filepath'], item['gt_filepath']
 
     def __len__(self):
-        return 100
+        return len(self.image_data)
 
 
 class PascalVOCTransform:
