@@ -210,3 +210,36 @@ class RandomTranslate:
             borderMode=cv2.BORDER_REPLICATE
         )
         return translated_image
+
+
+class RandomCrop:
+    def __init__(self, size):
+        self.height, self.width = size
+
+    def __call__(self, image, mask):
+        assert image.shape[:2] == mask.shape[:2]
+        assert image.shape[0] >= self.height and image.shape[1] >= self.width
+        scol = np.random.randint(0, image.shape[0] - self.height + 1)
+        srow = np.random.randint(0, image.shape[1] - self.width + 1)
+        image_crop = image[scol:scol+self.height, srow:srow+self.width]
+        mask_crop = mask[scol:scol+self.height, srow:srow+self.width]
+        return image_crop, mask_crop
+
+
+class PadTo:
+    def __init__(self, size, pad_value=0):
+        self.height, self.width = size
+        self.pad_value = pad_value
+
+    def __call__(self, image):
+        hpad = max(0, self.height - image.shape[0])
+        wpad = max(0, self.width - image.shape[1])
+        top_pad = hpad // 2
+        bottom_pad = hpad // 2 + hpad % 2
+        left_pad = wpad // 2
+        right_pad = wpad // 2 + wpad % 2
+        image = cv2.copyMakeBorder(
+            image, top_pad, bottom_pad, left_pad,
+            right_pad, cv2.BORDER_CONSTANT, value=self.pad_value
+        )
+        return image
