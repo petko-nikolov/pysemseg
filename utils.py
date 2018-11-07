@@ -1,6 +1,8 @@
 import shutil
 import sys
 import os
+import glob
+import re
 import numpy as np
 import torch
 
@@ -21,8 +23,18 @@ def restore(checkpoint_path, model, optimizer=None, restore_cpu=False, strict=Tr
         map_location=lambda storage, location: storage if restore_cpu else None)
     model.load_state_dict(checkpoint['state'], strict=strict)
     if optimizer is not None and strict:
-        optimizer.load_state_dict(checkpoint['optimizer'], strict=strict)
+        optimizer.load_state_dict(checkpoint['optimizer'])
     return checkpoint['epoch']
+
+
+def get_latest_checkpoint(model_dir):
+    def key_fn(path):
+        matches = re.match('checkpoint-(\d+)', os.path.basename(path))
+        return int(matches.groups()[0])
+    return sorted(
+        glob.glob(os.path.join(model_dir, 'checkpoint-*')),
+        key=key_fn
+    )[-1]
 
 
 def tensor_to_numpy(tensor):
@@ -68,9 +80,12 @@ def _get_palette_map(n_classes):
     return color_to_label
 
 
-class ColorPalette256:
-    def __init__(self, n_classes):
-        self.color_to_label = _get_palette_map(n_classes)
+class ColorPalette:
+    def __init__(self, colors):
+        if isinstance(colors, int):
+            self.color_to_label = _get_palette_map(colors)
+        else:
+            self.color_to_label = {v: k for k, v in enumerate(colors)}
         self.label_to_color = {v: k for k, v in self.color_to_label.items()}
 
     def encode_color(self, label_mask):
@@ -78,8 +93,8 @@ class ColorPalette256:
         Encodes a label mask with its RGB color representation
         Arguments:
             label_mask: A numpy array with dimensions either
-            (height, width), (height, width, 1), (batch_size, height, width) or
-            (batch_size, height, width, 1)
+                (height, width), (height, width, 1), (batch_size, height, width)
+                or (batch_size, height, width, 1)
 
         Returns: Color encoded representation
         """
