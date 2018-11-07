@@ -25,3 +25,11 @@ class DatasetTransformer(Dataset):
     @property
     def number_of_classes(self):
         return self.dataset.number_of_classes
+
+    @property
+    def color_palette(self):
+        return self.dataset.color_palette
+
+    @property
+    def ignore_index(self):
+        return self.dataset.ignore_index

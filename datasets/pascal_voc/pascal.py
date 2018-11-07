@@ -1,6 +1,6 @@
 import os
-from torch.utils.data import Dataset
 from torchvision.transforms import Normalize
+from datasets.base import SegmentationDataset
 import cv2
 import transforms
 
@@ -51,8 +51,9 @@ def _parse_image_paths(image_dir, ground_truth_dir, image_ids):
     return image_data
 
 
-class PascalVOCSegmentation(Dataset):
+class PascalVOCSegmentation(SegmentationDataset):
     def __init__(self, root, split='train'):
+        super().__init__()
 
         assert split in ['train', 'test', 'val']
         self.root = os.path.expanduser(root)
@@ -123,6 +124,10 @@ class PascalVOCSegmentation(Dataset):
     def labels(self):
         return PASCAL_CLASSES
 
+    @property
+    def ignore_index(self):
+        return 255
+
     def __getitem__(self, index):
         item = self.image_data[index]
         return item['id'], item['image_filepath'], item['gt_filepath']
@@ -132,24 +137,26 @@ class PascalVOCSegmentation(Dataset):
 
 
 class PascalVOCTransform:
-    def __init__(self, mode):
+    def __init__(self, mode, ignore_index=-1):
         self.mode = mode
         self.image_loader = transforms.Compose([
             transforms.CV2ImageLoader(),
-            transforms.Resize((512, 512)),
+            transforms.PadTo((224, 224)),
             transforms.ToFloatImage()
         ])
+
+        self.target_loader = transforms.Compose([
+            transforms.CV2ImageLoader(grayscale=True),
+            transforms.PadTo((224, 224), pad_value=ignore_index),
+        ])
+
+        self.crop = transforms.RandomCrop((224, 224))
 
         self.image_augmentations = transforms.Compose([
             transforms.RandomHueSaturation(
                 hue_delta=0.05, saturation_scale_range=(0.7, 1.3)),
             transforms.RandomContrast(0.5, 1.5),
             transforms.RandomBrightness(-32.0 / 255, 32. / 255)
-        ])
-
-        self.target_loader = transforms.Compose([
-            transforms.CV2ImageLoader(grayscale=True),
-            transforms.Resize((512, 512), interpolation=cv2.INTER_NEAREST)
         ])
 
         self.joint_augmentations = transforms.Compose(
@@ -166,6 +173,7 @@ class PascalVOCTransform:
     def __call__(self, image, target):
         image = self.image_loader(image)
         target = self.target_loader(target)
+        image, target = self.crop(image, target)
         if self.mode == 'train':
             image = self.image_augmentations(image)
             image, target = self.joint_augmentations(image, target)

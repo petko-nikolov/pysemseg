@@ -9,11 +9,11 @@ from tqdm import tqdm
 import numpy as np
 from transforms.loaders import CV2ImageLoader
 
-from utils import prompt_delete_dir, ColorPalette256
+from utils import prompt_delete_dir, ColorPalette
 
 
 OUTPUT_DIR = None
-color_palette = ColorPalette256(256)
+color_palette = ColorPalette(256)
 
 
 def process_mask(filename):
