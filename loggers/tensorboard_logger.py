@@ -1,13 +1,13 @@
 from tensorboardX import SummaryWriter
 import numpy as np
-from utils import flatten_dict, ColorPalette256
+from utils import flatten_dict, ColorPalette
 
 
 class TensorboardLogger:
-    def __init__(self, log_directory, name):
+    def __init__(self, log_directory, color_palette):
         self.log_directory = log_directory
         self.summary_writer = SummaryWriter(self.log_directory)
-        self.color_palette = ColorPalette256(256)
+        self.color_palette = color_palette
 
     def log_args(self, args_dict):
         args_text = "\n".join("{}: {}".format(k, v) for k, v in args_dict.items())

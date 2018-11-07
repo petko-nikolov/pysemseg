@@ -3,22 +3,24 @@ import numpy as np
 import cv2
 import visdom
 
-from utils import flatten_dict, ColorPalette256
+from utils import flatten_dict
 from transforms import ResizeBatch
 
 
 IMAGES_WIDTH = 128
 
 class VisdomLogger:
-    def __init__(self, log_directory):
+    def __init__(self, log_directory, color_palette, continue_logging=False):
         self.log_directory = log_directory
+        self.color_palette = color_palette
+        self.coninue_logging = continue_logging
         visdom_env = os.path.basename(log_directory)
         self.visdom = visdom.Visdom(
             env=visdom_env,
             log_to_filename=os.path.join(log_directory, 'viz.log')
         )
-        self.visdom.delete_env(visdom_env)
-        self.color_palette = ColorPalette256(256)
+        if not continue_logging:
+            self.visdom.delete_env(visdom_env)
 
     def log_args(self, args_dict):
         args_text = "<br />".join("{}: {}".format(k, v) for k, v in args_dict.items())
