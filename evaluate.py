@@ -1,5 +1,6 @@
 import numpy as np
 from torch.autograd import Variable
+import torch
 from metrics import SegmentationMetrics
 from utils import tensor_to_numpy, flatten_dict
 
@@ -12,37 +13,38 @@ def evaluate(
     metrics = SegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=255
+        ignore_index=loader.dataset.ignore_index
     )
 
-    for step, (_, data, target) in enumerate(loader):
-        if cuda:
-            data, target = data.cuda(), target.cuda()
+    with torch.no_grad():
+        for step, (_, data, target) in enumerate(loader):
+            if cuda:
+                data, target = data.cuda(), target.cuda()
 
-        data, target = Variable(data), Variable(target)
-        output = model(data)
-        loss = criterion(output, target)
+            data, target = Variable(data), Variable(target)
+            output = model(data)
+            loss = criterion(output, target)
 
-        output = tensor_to_numpy(output.data)
-        predictions = np.argmax(output, axis=1)
+            output = tensor_to_numpy(output.data)
+            predictions = np.argmax(output, axis=1)
 
-        mean_loss = loss / int(np.prod(target.shape))
+            mean_loss = loss / int(np.prod(target.shape))
+            mean_loss = loss
 
-        metrics.add(
-            predictions,
-            tensor_to_numpy(target.data),
-            float(tensor_to_numpy(mean_loss.data)))
-
-        if step % 10 == 0:
-            visual_logger.log_prediction_images(
-                step,
-                tensor_to_numpy(data.data),
-                tensor_to_numpy(target.data),
+            metrics.add(
                 predictions,
-                name='images',
-                prefix='Validation'
-            )
+                tensor_to_numpy(target.data),
+                float(tensor_to_numpy(mean_loss.data)))
 
+            if step % 10 == 0:
+                visual_logger.log_prediction_images(
+                    step,
+                    tensor_to_numpy(data.data),
+                    tensor_to_numpy(target.data),
+                    predictions,
+                    name='images',
+                    prefix='Validation'
+                )
 
     metrics_dict = metrics.metrics()
 

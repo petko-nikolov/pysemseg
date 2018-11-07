@@ -16,7 +16,8 @@ from evaluate import evaluate
 
 import datasets
 from utils import (
-    prompt_delete_dir, restore, tensor_to_numpy, import_class_module, flatten_dict)
+    prompt_delete_dir, restore, tensor_to_numpy, import_class_module,
+    flatten_dict, get_latest_checkpoint)
 from logger import StepLogger
 
 
@@ -61,9 +62,12 @@ def define_args():
                         help=('Class weights passed as a JSON object, e.g:'
                               '{"0": 5.0, "2": 3.0}, missing classes get'
                               'weight one one'))
-    parser.add_argument('--allow-missing-keys', action='store_true', default=False,
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--allow-missing-keys', action='store_true', default=False,
                         help='Whether to allow module keys to differ from checkpoint keys'
                              ' when loading a checkpoint')
+    group.add_argument('--continue_training', action='store_true', default=False,
+                       help='Continue experiment from the last checkpoint in the model dir')
     return parser
 
 
@@ -80,19 +84,19 @@ def save(model, optimizer, model_dir, epoch, args):
 
 
 def train_epoch(
-        model, loader, criterion, optimizer, epoch, console_logger,
-        visual_logger):
+        model, loader, criterion, optimizer, lr_scheduler,
+        epoch, console_logger, visual_logger):
     model.train()
 
     metrics = SegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=255
+        ignore_index=loader.dataset.ignore_index
     )
     epoch_metrics = SegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=255)
+        ignore_index=loader.dataset.ignore_index)
 
     for step, (ids, data, target) in enumerate(loader):
         if args.cuda:
@@ -101,17 +105,18 @@ def train_epoch(
         start_time = time.time()
 
         data, target = Variable(data), Variable(target)
-        optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
+        optimizer.zero_grad()
 
         output = F.softmax(output, dim=1)
         output = tensor_to_numpy(output.data)
         predictions = np.argmax(output, axis=1)
 
         mean_loss = loss / int(np.prod(target.shape))
+        mean_loss = loss
 
         metrics.add(
             predictions,
@@ -157,8 +162,9 @@ def _get_class_weights(weights_json_str, n_classes, cuda=False):
 
 
 def train(args):
-    prompt_delete_dir(args.model_dir)
-    os.makedirs(args.model_dir)
+    if not args.continue_training:
+        prompt_delete_dir(args.model_dir)
+        os.makedirs(args.model_dir)
 
     # store args
     with open(os.path.join(args.model_dir, 'args.json'), 'w') as args_file:
@@ -190,7 +196,9 @@ def train(args):
         validate_dataset, batch_size=args.test_batch_size,
         shuffle=False, num_workers=args.num_workers)
 
-    visual_logger = VisdomLogger(log_directory=args.model_dir)
+    visual_logger = VisdomLogger(
+        log_directory=args.model_dir, color_palette=train_dataset.color_palette,
+        continue_logging=args.continue_training)
 
     visual_logger.log_args(args.__dict__)
 
@@ -204,14 +212,20 @@ def train(args):
         model = model.cuda()
 
     # optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    optimizer = optim.SGD(
-        model.parameters(), lr=args.lr, momentum=0.99, weight_decay=5e-4)
-
-
+    # optimizer = optim.SGD(
+    #    model.parameters(), lr=args.lr, momentum=0.99, weight_decay=5e-4)
+    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-4)
     start_epoch = 0
+
+    if args.continue_training:
+        args.checkpoint = get_latest_checkpoint(args.model_dir)
+        assert args.checkpoint is not None
+
     if args.checkpoint:
         start_epoch = restore(
             args.checkpoint, model, optimizer, strict=not args.allow_missing_keys) + 1
+
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 1, 0.95)
 
     weights = None
     if args.weights:
@@ -219,7 +233,8 @@ def train(args):
             args.weights, train_dataset.number_of_classes, args.cuda)
 
     criterion = torch.nn.CrossEntropyLoss(
-        weight=weights, reduction='sum', ignore_index=255)
+        weight=weights, reduction='elementwise_mean',
+        ignore_index=train_dataset.ignore_index)
     if args.cuda:
         criterion = criterion.cuda()
 
@@ -228,13 +243,14 @@ def train(args):
     with StepLogger(filename=log_filepath) as logger:
         for epoch in range(start_epoch, start_epoch + args.epochs):
             train_epoch(
-                model, train_loader, criterion, optimizer, epoch, logger,
-                visual_logger)
+                model, train_loader, criterion, optimizer, lr_scheduler,
+                epoch, logger, visual_logger)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
                 visual_logger, args.cuda)
             if epoch % args.save_model_frequency == 0:
                 save(model, optimizer, args.model_dir, epoch, args)
+            lr_scheduler.step()
 
 
 if '__main__' == __name__:
