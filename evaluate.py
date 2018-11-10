@@ -25,22 +25,25 @@ def evaluate(
             output = model(data)
             loss = criterion(output, target)
 
-            output = tensor_to_numpy(output.data)
+            output, target, loss = [
+                tensor_to_numpy(t.data) for t in [output, target, loss]
+            ]
+
             predictions = np.argmax(output, axis=1)
 
-            mean_loss = loss / int(np.prod(target.shape))
-            mean_loss = loss
+            if criterion.reduction == 'sum':
+                if loader.dataset.ignore_index:
+                    loss = loss / np.sum(target != loader.dataset.ignore_index)
+                else:
+                    loss = loss / np.prod(target.shape)
 
-            metrics.add(
-                predictions,
-                tensor_to_numpy(target.data),
-                float(tensor_to_numpy(mean_loss.data)))
+            metrics.add(predictions, target, float(loss))
 
             if step % 10 == 0:
                 visual_logger.log_prediction_images(
                     step,
                     tensor_to_numpy(data.data),
-                    tensor_to_numpy(target.data),
+                    target.data,
                     predictions,
                     name='images',
                     prefix='Validation'

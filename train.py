@@ -49,6 +49,9 @@ def define_args():
                         help='logging training status frequency')
     parser.add_argument('--log-images-interval', type=int, default=200, metavar='N',
                         help='Frequency of logging images and larger plots')
+    parser.add_argument('--loss_reduction', type=str, default='elementwise_mean',
+                        choices=['elementwise_mean', 'sum'],
+                        help='Sum or average individual pixel losses.')
     parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
     parser.add_argument('--num-workers', type=int, default=1,
                         help='Number of CPU data workers')
@@ -112,21 +115,20 @@ def train_epoch(
         optimizer.zero_grad()
 
         output = F.softmax(output, dim=1)
-        output = tensor_to_numpy(output.data)
+        output, target, loss = [
+            tensor_to_numpy(t.data) for t in [output, target, loss]
+        ]
         predictions = np.argmax(output, axis=1)
 
-        mean_loss = loss / int(np.prod(target.shape))
-        mean_loss = loss
+        if criterion.reduction == 'sum':
+            if loader.dataset.ignore_index is not None:
+                loss = loss / np.sum(target != loader.dataset.ignore_index)
+            else:
+                loss = loss / np.prod(target.shape)
 
-        metrics.add(
-            predictions,
-            tensor_to_numpy(target.data),
-            float(tensor_to_numpy(mean_loss.data)))
+        metrics.add(predictions, target, float(loss))
 
-        epoch_metrics.add(
-            predictions,
-            tensor_to_numpy(target.data),
-            float(tensor_to_numpy(mean_loss.data)))
+        epoch_metrics.add(predictions, target, float(loss))
 
         if step % args.log_interval == 0:
 
@@ -141,7 +143,7 @@ def train_epoch(
             visual_logger.log_prediction_images(
                 step,
                 tensor_to_numpy(data.data),
-                tensor_to_numpy(target.data),
+                target,
                 predictions,
                 name='images',
                 prefix='Train'
@@ -214,7 +216,7 @@ def train(args):
     # optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # optimizer = optim.SGD(
     #    model.parameters(), lr=args.lr, momentum=0.99, weight_decay=5e-4)
-    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-4, momentum=0.8)
     start_epoch = 0
 
     if args.continue_training:
@@ -233,8 +235,9 @@ def train(args):
             args.weights, train_dataset.number_of_classes, args.cuda)
 
     criterion = torch.nn.CrossEntropyLoss(
-        weight=weights, reduction='elementwise_mean',
+        weight=weights, reduction=args.loss_reduction,
         ignore_index=train_dataset.ignore_index)
+
     if args.cuda:
         criterion = criterion.cuda()
 
