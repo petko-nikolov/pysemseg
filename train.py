@@ -39,6 +39,16 @@ def define_args():
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
+    parser.add_argument('--optimizer', type=str, default='RMSprop',
+                        required=False,
+                        help='Optimizer type.')
+    parser.add_argument('--optimizer_args', type=json.loads, default={},
+                        required=False,
+                        help='Optimizer args.')
+    parser.add_argument('--lr_scheduler', type=str, required=False,
+                        help='Learning rate scheduler type.')
+    parser.add_argument('--lr_scheduler_args', type=str, required=False,
+                        help='Learning rate scheduler args.')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 0.001)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -121,7 +131,7 @@ def train_epoch(
         predictions = np.argmax(output, axis=1)
 
         if criterion.reduction == 'sum':
-            if loader.dataset.ignore_index is not None:
+            if loader.dataset.ignore_index:
                 loss = loss / np.sum(target != loader.dataset.ignore_index)
             else:
                 loss = loss / np.prod(target.shape)
@@ -216,7 +226,10 @@ def train(args):
     # optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # optimizer = optim.SGD(
     #    model.parameters(), lr=args.lr, momentum=0.99, weight_decay=5e-4)
-    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-4, momentum=0.8)
+    optimizer_class = import_class_module('torch.optim.' + args.optimizer)
+    print(args.optimizer_args)
+    optimizer = optimizer_class(
+        model.parameters(), lr=args.lr, **args.optimizer_args)
     start_epoch = 0
 
     if args.continue_training:
@@ -227,9 +240,9 @@ def train(args):
         start_epoch = restore(
             args.checkpoint, model, optimizer, strict=not args.allow_missing_keys) + 1
 
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 1, 0.95)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
 
-    weights = None
+    weights=None
     if args.weights:
         weights = _get_class_weights(
             args.weights, train_dataset.number_of_classes, args.cuda)
