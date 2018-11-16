@@ -1,6 +1,7 @@
-import copy
-import torch.nn as nn
 import math
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 class Bottleneck(nn.Module):
@@ -77,23 +78,21 @@ class ResNet(nn.Module):
     def __init__(self, in_channels, layers_config):
         super().__init__()
         assert len(layers_config) == 4
-        channels = 64
         expansion = 4
+        channels = layers_config[0]['channels']
         self.conv1 = nn.Conv2d(
             in_channels, channels, kernel_size=7, stride=2, padding=3,
             bias=False)
         self.bn1 = nn.BatchNorm2d(channels)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = ResBlock(
-            channels, 64, expansion=expansion, **layers_config[0])
-        channels = 64 * expansion
-        self.layer2 = ResBlock(channels, 128, **layers_config[1])
-        channels = 128 * expansion
-        self.layer3 = ResBlock(channels, 256, **layers_config[2])
-        channels = 256 * expansion
-        self.layer4 = ResBlock(channels, 512, **layers_config[3])
-        channels = 512 * channels
+        self.layers = nn.Sequential()
+        for i, layer_config in enumerate(layers_config):
+            self.layers.add_module(
+                'layer{}'.format(i + 1),
+                ResBlock(channels, **layer_config, expansion=expansion)
+            )
+            channels = layer_config['channels'] * expansion
 
         self.reset_parameters()
 
@@ -111,30 +110,103 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-
+        x = self.layers(x)
         return x
 
 
-def resnet50(output_stride=16, additional_blocks=0, pretrained=False):
-    rate  = 16 // output_stride
-    stride = 1 if rate == 2 else 2
+def resnet50(output_stride=16, pretrained=False):
+    assert output_stride in [8, 16]
+    rate3  = 16 // output_stride
+    stride3 = 1 if rate3 == 2 else 2
     blocks = [
-        {'stride': 1, 'n_layers': 3},
-        {'stride': 2, 'n_layers': 4},
-        {'stride': stride, 'n_layers': 6, 'dilations': [rate] * 6},
-        {'stride': 1, 'n_layers': 3,
-         'dilations': [rate * ur for ur in [6, 12, 18]]}
+        {
+            'stride': 1,
+            'n_layers': 3,
+            'channels': 64
+        },
+        {
+            'stride': 2,
+            'n_layers': 4,
+            'channels': 128
+        },
+        {
+            'stride': stride3,
+            'n_layers': 6,
+            'dilations': [rate3] * 6,
+            'channels': 256
+        },
+        {
+            'stride': 1,
+            'n_layers': 3,
+            'dilations': [2] * 3,
+            'channels': 512
+        }
     ]
-    model = ResNet(3, blocks)
-    return model
+    return ResNet(3, blocks)
 
 
-class DeepLabv3(nn.Module):
-    def __init__(self, in_channels, n_classes, output_scale=16, multi_grid=(6, 12, 18)):
+class ASPPModule(nn.Module):
+    def __init__(self, in_channels, out_channels, multi_grid):
+        super().__init__()
+        assert len(multi_grid) == 3
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1,
+                               bias=False)
+        self.conv2 = nn.Conv2d(
+            in_channels, out_channels, kernel_size=3, dilation=multi_grid[0],
+            padding=multi_grid[0], bias=False)
+        self.conv3 = nn.Conv2d(
+            in_channels, out_channels, kernel_size=3, dilation=multi_grid[1],
+            padding=multi_grid[1], bias=False)
+        self.conv4 = nn.Conv2d(
+            in_channels, out_channels, kernel_size=3, dilation=multi_grid[2],
+            padding=multi_grid[2], bias=False)
+        self.global_avg_pool = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1,1)),
+            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+        )
+        self.bn = nn.BatchNorm2d(5 * out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.final_conv = nn.Conv2d(
+            5 * out_channels, out_channels, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        x1 = self.conv1(x)
+        x2 = self.conv2(x)
+        x3 = self.conv3(x)
+        x4 = self.conv4(x)
+        x5 = self.global_avg_pool(x)
+        x5 = F.interpolate(x5, size=x1.size()[2:], mode='bilinear')
+        x = torch.cat([x1, x2, x3, x4, x5], dim=1)
+        x = self.relu(self.bn(x))
+        x = self.final_conv(x)
+        return x
+
+class DeepLabV3(nn.Sequential):
+    def __init__(self, channels, n_classes, backbone_model, aspp_module):
+        super().__init__()
+        self.backbone = backbone_model
+        self.aspp = aspp_module
+        self.score = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channels, n_classes, kernel_size=1)
+        )
+
+    def forward(self, x):
+        input_size = x.shape[2:]
+        x = self.backbone(x)
+        x = self.aspp(x)
+        x = F.interpolate(x, size=input_size, mode='bilinear')
+        x = self.score(x)
+        return x
+
+
+class DeepLabV3ResNet50(DeepLabV3):
+    def __init__(self, in_channels, n_classes, output_stride=16,
+                 multi_grid=[6, 12, 18]):
         assert in_channels == 3
-        pass
+        resnet = resnet50(output_stride=output_stride, pretrained=True)
+        rate = 2 if output_stride == 8 else 1
+        aspp = ASPPModule(2048, 256, [rate * mg for mg in multi_grid])
+        super().__init__(256, n_classes, resnet, aspp)
