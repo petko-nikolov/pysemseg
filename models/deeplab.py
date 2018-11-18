@@ -1,7 +1,10 @@
 import math
+import re
+from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.model_zoo as model_zoo
 
 
 class Bottleneck(nn.Module):
@@ -63,13 +66,13 @@ class ResBlock(nn.Sequential):
 
         layers = []
         self.add_module(
-            'bottleneck0', Bottleneck(
+            '0', Bottleneck(
                 in_channels, channels, channels * expansion, stride,
                 dilations[0], downsample=downsample))
         in_channels = channels * expansion
         for i in range(1, n_layers):
             self.add_module(
-                'bottleneck{}'.format(i),
+                '{}'.format(i),
                 Bottleneck(in_channels, channels, in_channels,
                            dilation=dilations[i]))
 
@@ -95,6 +98,15 @@ class ResNet(nn.Module):
             channels = layer_config['channels'] * expansion
 
         self.reset_parameters()
+
+    def load_pretrained_model(self, url):
+        def replace_key(key):
+            return re.sub(r'layer(\d)', r'layers.layer\g<1>', key)
+        state_dict = model_zoo.load_url(url)
+        state_dict = OrderedDict([
+            (replace_key(key), value) for key, value in state_dict.items()
+        ])
+        self.load_state_dict(state_dict, strict=False)
 
     def reset_parameters(self):
         for m in self.modules():
@@ -132,6 +144,42 @@ def resnet50(output_stride=16, pretrained=False):
         {
             'stride': stride3,
             'n_layers': 6,
+            'dilations': [rate3] * 6,
+            'channels': 256
+        },
+        {
+            'stride': 1,
+            'n_layers': 3,
+            'dilations': [2] * 3,
+            'channels': 512
+        }
+    ]
+    resnet = ResNet(3, blocks)
+
+    if pretrained:
+        resnet.load_pretrained_model(
+            'https://download.pytorch.org/models/resnet50-19c8e357.pth')
+
+    return resnet
+
+def resnet101(output_stride=16, pretrained=False):
+    assert output_stride in [8, 16]
+    rate3  = 16 // output_stride
+    stride3 = 1 if rate3 == 2 else 2
+    blocks = [
+        {
+            'stride': 1,
+            'n_layers': 3,
+            'channels': 64
+        },
+        {
+            'stride': 2,
+            'n_layers': 4,
+            'channels': 128
+        },
+        {
+            'stride': stride3,
+            'n_layers': 23,
             'dilations': [rate3] * 6,
             'channels': 256
         },
@@ -181,7 +229,7 @@ class ASPPModule(nn.Module):
         x = self.final_conv(x)
         return x
 
-class DeepLabV3(nn.Sequential):
+class DeepLabV3(nn.Module):
     def __init__(self, channels, n_classes, backbone_model, aspp_module):
         super().__init__()
         self.backbone = backbone_model
@@ -207,6 +255,16 @@ class DeepLabV3ResNet50(DeepLabV3):
                  multi_grid=[6, 12, 18]):
         assert in_channels == 3
         resnet = resnet50(output_stride=output_stride, pretrained=True)
+        rate = 2 if output_stride == 8 else 1
+        aspp = ASPPModule(2048, 256, [rate * mg for mg in multi_grid])
+        super().__init__(256, n_classes, resnet, aspp)
+
+
+class DeepLabV3ResNet101(DeepLabV3):
+    def __init__(self, in_channels, n_classes, output_stride=16,
+                 multi_grid=[6, 12, 18]):
+        assert in_channels == 3
+        resnet = resnet101(output_stride=output_stride, pretrained=True)
         rate = 2 if output_stride == 8 else 1
         aspp = ASPPModule(2048, 256, [rate * mg for mg in multi_grid])
         super().__init__(256, n_classes, resnet, aspp)
