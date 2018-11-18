@@ -148,7 +148,11 @@ def train_epoch(
             metrics_dict.pop('class')
             console_logger.log(step, epoch, loader, data, metrics_dict)
 
-            metrics = SegmentationMetrics(loader.dataset.number_of_classes)
+            metrics = SegmentationMetrics(
+                loader.dataset.number_of_classes,
+                loader.dataset.labels,
+                ignore_index=loader.dataset.ignore_index
+            )
 
             visual_logger.log_prediction_images(
                 step,

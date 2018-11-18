@@ -99,7 +99,7 @@ class CamVidTransform:
             transforms.CV2ImageLoader(grayscale=True),
         ])
 
-        self.crop = transforms.RandomCrop((224, 224))
+        self.crop = transforms.RandomCropFixedSize((224, 224))
 
         self.image_augmentations = transforms.Compose([
             transforms.RandomHueSaturation(
@@ -122,7 +122,7 @@ class CamVidTransform:
     def __call__(self, image, target):
         image = self.image_loader(image)
         target = self.target_loader(target)
-        # image, target = self.crop(image, target)
+        image, target = self.crop(image, target)
         if self.mode == 'train':
             image, target = self.joint_augmentations(image, target)
             image = self.image_augmentations(image)

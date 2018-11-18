@@ -212,7 +212,7 @@ class RandomTranslate:
         return translated_image
 
 
-class RandomCrop:
+class RandomCropFixedSize:
     def __init__(self, size):
         self.height, self.width = size
 
@@ -225,6 +225,47 @@ class RandomCrop:
         mask_crop = mask[scol:scol+self.height, srow:srow+self.width]
         return image_crop, mask_crop
 
+
+class RandomCrop:
+    def __init__(self, scale_height=(0.8, 1.0), scale_width=(0.8, 1.0)):
+        self.scale_height = scale_height
+        self.scale_width = scale_width
+
+    def __call__(self, image, mask):
+        assert image.shape[:2] == mask.shape[:2]
+        sh = np.random.uniform(*self.scale_height)
+        sw = np.random.uniform(*self.scale_width)
+        crop_height = int(sh * image.shape[0])
+        crop_width = int(sw * image.shape[1])
+        return RandomCropFixedSize((crop_height, crop_width))(image, mask)
+
+
+class ScaleTo:
+    def __init__(self, size, interpolation=cv2.INTER_LANCZOS4):
+        self.height, self.width = size
+        self.interpolation = interpolation
+
+    def __call__(self, image, mask):
+        scale = min(self.height / image.shape[0], self.width / image.shape[1])
+        height = int(scale * image.shape[0])
+        width = int(scale * image.shape[1])
+        return (
+            cv2.resize(image, (width, height),
+                interpolation=self.interpolation),
+            cv2.resize(mask, (width, height),
+                interpolation=cv2.INTER_NEAREST)
+        )
+
+
+class Concat:
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, *args):
+        assert len(args) == len(self.transforms)
+        return [
+            tr(x) for tr, x in zip(self.transforms, args)
+        ]
 
 class PadTo:
     def __init__(self, size, pad_value=0):

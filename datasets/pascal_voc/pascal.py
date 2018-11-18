@@ -141,16 +141,12 @@ class PascalVOCTransform:
         self.mode = mode
         self.image_loader = transforms.Compose([
             transforms.CV2ImageLoader(),
-            transforms.PadTo((224, 224)),
             transforms.ToFloatImage()
         ])
 
         self.target_loader = transforms.Compose([
             transforms.CV2ImageLoader(grayscale=True),
-            transforms.PadTo((224, 224), pad_value=ignore_index),
         ])
-
-        self.crop = transforms.RandomCrop((224, 224))
 
         self.image_augmentations = transforms.Compose([
             transforms.RandomHueSaturation(
@@ -159,8 +155,14 @@ class PascalVOCTransform:
             transforms.RandomBrightness(-32.0 / 255, 32. / 255)
         ])
 
-        self.joint_augmentations = transforms.Compose(
-            [transforms.RandomHorizontalFlip()]
+        self.joint_augmentations = transforms.Compose([
+            transforms.RandomCrop(),
+            transforms.ScaleTo((513, 513)),
+            transforms.Concat([
+                transforms.PadTo((513, 513)),
+                transforms.PadTo((513, 513), ignore_index)
+            ]),
+            transforms.RandomHorizontalFlip()]
         )
 
         self.tensor_transforms = transforms.Compose([
@@ -173,7 +175,6 @@ class PascalVOCTransform:
     def __call__(self, image, target):
         image = self.image_loader(image)
         target = self.target_loader(target)
-        image, target = self.crop(image, target)
         if self.mode == 'train':
             image = self.image_augmentations(image)
             image, target = self.joint_augmentations(image, target)
