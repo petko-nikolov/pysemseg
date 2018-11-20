@@ -1,7 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from models.layers import PaddingSameConv2d
 
 
 class VGGFCN32(nn.Module):
@@ -47,7 +46,7 @@ class VGGFCN16(nn.Module):
         self.n_classes = n_classes
         self.vgg16 = models.vgg16(pretrained=True)
         self.classifier = nn.Sequential(
-            PaddingSameConv2d(512, 4096, 7),
+            nn.Conv2d(512, 4096, kernel_size=7, padding=3),
             nn.ReLU(True),
             nn.Dropout(),
             nn.Conv2d(4096, 4096, 1),
@@ -56,7 +55,8 @@ class VGGFCN16(nn.Module):
             nn.Conv2d(4096, n_classes, 1),
         )
         self.score4 = nn.Conv2d(512, n_classes, kernel_size=1)
-        self.upscale5 = nn.ConvTranspose2d(n_classes, n_classes, kernel_size=2, stride=2)
+        self.upscale5 = nn.ConvTranspose2d(
+            n_classes, n_classes, kernel_size=2, stride=2)
 
         self._initialize_weights()
 
@@ -89,7 +89,7 @@ class VGGFCN8(nn.Module):
         self.n_classes = n_classes
         self.vgg16 = models.vgg16(pretrained=True)
         self.classifier = nn.Sequential(
-            PaddingSameConv2d(512, 4096, 7),
+            nn.Conv2d(512, 4096, kernel_size=7, padding=3),
             nn.ReLU(True),
             nn.Dropout(),
             nn.Conv2d(4096, 4096, 1),
@@ -97,10 +97,14 @@ class VGGFCN8(nn.Module):
             nn.Dropout(),
             nn.Conv2d(4096, n_classes, 1),
         )
-        self.upscale4 = nn.ConvTranspose2d(n_classes, n_classes, kernel_size=2, stride=2)
-        self.score4 = nn.Conv2d(512, n_classes, kernel_size=1, stride=1)
-        self.score3 = nn.Conv2d(256, n_classes, kernel_size=1, stride=1)
-        self.upscale5 = nn.ConvTranspose2d(n_classes, n_classes, kernel_size=2, stride=2)
+        self.upscale4 = nn.ConvTranspose2d(
+            n_classes, n_classes, kernel_size=2, stride=2)
+        self.score4 = nn.Conv2d(
+            512, n_classes, kernel_size=1, stride=1)
+        self.score3 = nn.Conv2d(
+            256, n_classes, kernel_size=1, stride=1)
+        self.upscale5 = nn.ConvTranspose2d(
+            n_classes, n_classes, kernel_size=2, stride=2)
 
         self._initialize_weights()
 
