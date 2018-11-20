@@ -57,8 +57,10 @@ def _parse_image_paths(images_dir, annotations_dir):
 class CamVid(SegmentationDataset):
     def __init__(self, root_dir, split):
         super().__init__()
-        self.color_palette_ = ColorPalette(CAMVID_COLORS)
         assert split in ['train', 'val', 'test']
+        self.color_palette_ = ColorPalette(CAMVID_COLORS)
+        self.image_loader = CV2ImageLoader()
+        self.target_laoder = CV2ImageLoader(grayscale=True)
         self.root_dir = root_dir
         self.split = split
         self.image_data = _parse_image_paths(
@@ -80,7 +82,11 @@ class CamVid(SegmentationDataset):
 
     def __getitem__(self, index):
         item = self.image_data[index]
-        return item['id'], item['image_filepath'], item['gt_filepath']
+        return (
+            item['id'],
+            self.image_loader(item['image_filepath']),
+            self.target_loader(item['gt_filepath'])
+        )
 
     def __len__(self):
         return len(self.image_data)
@@ -91,15 +97,8 @@ class CamVidTransform:
     def __init__(self, mode):
         self.mode = mode
         self.image_loader = transforms.Compose([
-            transforms.CV2ImageLoader(),
             transforms.ToFloatImage()
         ])
-
-        self.target_loader = transforms.Compose([
-            transforms.CV2ImageLoader(grayscale=True),
-        ])
-
-        self.crop = transforms.RandomCropFixedSize((224, 224))
 
         self.image_augmentations = transforms.Compose([
             transforms.RandomHueSaturation(
@@ -109,6 +108,7 @@ class CamVidTransform:
         ])
 
         self.joint_augmentations = transforms.Compose([
+             transforms.RandomCropFixedSize((224, 224)),
              transforms.RandomHorizontalFlip()
         ])
 
@@ -121,8 +121,6 @@ class CamVidTransform:
 
     def __call__(self, image, target):
         image = self.image_loader(image)
-        target = self.target_loader(target)
-        image, target = self.crop(image, target)
         if self.mode == 'train':
             image, target = self.joint_augmentations(image, target)
             image = self.image_augmentations(image)

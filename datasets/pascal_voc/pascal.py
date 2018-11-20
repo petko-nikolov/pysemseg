@@ -58,6 +58,8 @@ class PascalVOCSegmentation(SegmentationDataset):
         assert split in ['train', 'test', 'val']
         self.root = os.path.expanduser(root)
         self.split = split
+        self.image_loader = transforms.CV2ImageLoader()
+        self.target_loader = transforms.CV2ImageLoader(grayscale=True)
 
         benchmark_train_ids = set(
             _read_image_ids(
@@ -130,22 +132,22 @@ class PascalVOCSegmentation(SegmentationDataset):
 
     def __getitem__(self, index):
         item = self.image_data[index]
-        return item['id'], item['image_filepath'], item['gt_filepath']
+        return (
+            item['id'],
+            self.image_loader(item['image_filepath']),
+            self.target_loader(item['gt_filepath'])
+        )
 
     def __len__(self):
         return len(self.image_data)
 
 
 class PascalVOCTransform:
-    def __init__(self, mode, ignore_index=-1):
+    def __init__(self, mode):
+        self.ignore_index = 255
         self.mode = mode
         self.image_loader = transforms.Compose([
-            transforms.CV2ImageLoader(),
             transforms.ToFloatImage()
-        ])
-
-        self.target_loader = transforms.Compose([
-            transforms.CV2ImageLoader(grayscale=True),
         ])
 
         self.image_augmentations = transforms.Compose([
@@ -160,7 +162,7 @@ class PascalVOCTransform:
             transforms.ScaleTo((513, 513)),
             transforms.Concat([
                 transforms.PadTo((513, 513)),
-                transforms.PadTo((513, 513), ignore_index)
+                transforms.PadTo((513, 513), 255)
             ]),
             transforms.RandomHorizontalFlip()]
         )
@@ -174,7 +176,6 @@ class PascalVOCTransform:
 
     def __call__(self, image, target):
         image = self.image_loader(image)
-        target = self.target_loader(target)
         if self.mode == 'train':
             image = self.image_augmentations(image)
             image, target = self.joint_augmentations(image, target)

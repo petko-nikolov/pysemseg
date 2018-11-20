@@ -17,7 +17,7 @@ from evaluate import evaluate
 import datasets
 from utils import (
     prompt_delete_dir, restore, tensor_to_numpy, import_class_module,
-    flatten_dict, get_latest_checkpoint)
+    flatten_dict, get_latest_checkpoint, save)
 from logger import StepLogger
 
 
@@ -26,6 +26,8 @@ def define_args():
     parser.add_argument('--model', type=str, required=True,
                         help=('A path to the model including the module. '
                               'Should be resolvable'))
+    parser.add_argument('--model_args', type=json.loads, required=False, default={},
+                        help=('Args passed to the model constructor'))
     parser.add_argument('--data-dir', type=str, required=True,
                         help='Path to the dataset root dir.')
     parser.add_argument('--model-dir', type=str, required=True,
@@ -47,8 +49,14 @@ def define_args():
                         help='Optimizer args.')
     parser.add_argument('--lr_scheduler', type=str, required=False,
                         help='Learning rate scheduler type.')
-    parser.add_argument('--lr_scheduler_args', type=str, required=False,
+    parser.add_argument('--lr_scheduler_args', type=json.loads, default={},
+                        required=False,
                         help='Learning rate scheduler args.')
+    parser.add_argument('--transformer', type=str, required=False,
+                        help='Transformer type')
+    parser.add_argument('--transformer_args', type=json.loads, default={},
+                        required=False,
+                        help='Transformer args.')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 0.001)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -74,7 +82,7 @@ def define_args():
     parser.add_argument('--weights', type=str, required=False,
                         help=('Class weights passed as a JSON object, e.g:'
                               '{"0": 5.0, "2": 3.0}, missing classes get'
-                              'weight one one'))
+                              'weight one'))
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--allow-missing-keys', action='store_true', default=False,
                         help='Whether to allow module keys to differ from checkpoint keys'
@@ -84,21 +92,9 @@ def define_args():
     return parser
 
 
-def save(model, optimizer, model_dir, epoch, args):
-    save_dict = {
-        'state': model.state_dict(),
-        'epoch': epoch,
-        'optimizer': optimizer.state_dict(),
-        'args': args.__dict__
-    }
-    torch.save(
-        save_dict,
-        os.path.join(model_dir, 'checkpoint-{}'.format(epoch)))
-
-
 def train_epoch(
         model, loader, criterion, optimizer, lr_scheduler,
-        epoch, console_logger, visual_logger):
+        epoch, console_logger, visual_logger, cuda, log_interval):
     model.train()
 
     metrics = SegmentationMetrics(
@@ -112,7 +108,7 @@ def train_epoch(
         ignore_index=loader.dataset.ignore_index)
 
     for step, (ids, data, target) in enumerate(loader):
-        if args.cuda:
+        if cuda:
             data, target = data.cuda(), target.cuda()
 
         start_time = time.time()
@@ -140,7 +136,7 @@ def train_epoch(
 
         epoch_metrics.add(predictions, target, float(loss))
 
-        if step % args.log_interval == 0:
+        if step % log_interval == 0:
 
             metrics_dict = metrics.metrics()
             metrics_dict['time'] = time.time() - start_time
@@ -192,21 +188,20 @@ def train(args):
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
 
-    # initialize dataset
-    assert args.dataset in datasets.handlers.__dict__, (
-        "Handler for dataset {} not available.".format(args.dataset))
-
     # train dataset loading
-    train_dataset = datasets.handlers.__dict__[args.dataset](
-        args.data_dir, mode='train')
+    dataset_cls = import_class_module(args.dataset)
+    transformer_cls = import_class_module(args.transformer)
+
+    train_dataset = datasets.create_dataset(
+        args.data_dir, dataset_cls, transformer_cls, mode='train')
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size,
         shuffle=True, num_workers=args.num_workers)
 
     # validation dataset loading
-    validate_dataset = datasets.handlers.__dict__[args.dataset](
-        args.data_dir, mode='val')
+    validate_dataset = datasets.create_dataset(
+        args.data_dir, dataset_cls, transformer_cls, mode='val')
 
     validate_loader = torch.utils.data.DataLoader(
         validate_dataset, batch_size=args.test_batch_size,
@@ -227,11 +222,7 @@ def train(args):
     if args.cuda:
         model = model.cuda()
 
-    # optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    # optimizer = optim.SGD(
-    #    model.parameters(), lr=args.lr, momentum=0.99, weight_decay=5e-4)
     optimizer_class = import_class_module('torch.optim.' + args.optimizer)
-    print(args.optimizer_args)
     optimizer = optimizer_class(
         model.parameters(), lr=args.lr, **args.optimizer_args)
     start_epoch = 0
@@ -264,16 +255,24 @@ def train(args):
         for epoch in range(start_epoch, start_epoch + args.epochs):
             train_epoch(
                 model, train_loader, criterion, optimizer, lr_scheduler,
-                epoch, logger, visual_logger)
+                epoch, logger, visual_logger, args.cuda, args.log_interval)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
                 visual_logger, args.cuda)
             if epoch % args.save_model_frequency == 0:
-                save(model, optimizer, args.model_dir, epoch, args)
+                save(
+                    model, optimizer, args.model_dir,
+                    train_loader.dataset.in_channels,
+                    train_loader.dataset.n_classes,
+                    epoch, args)
             lr_scheduler.step()
 
 
-if '__main__' == __name__:
+def main():
     parser = define_args()
     args = parser.parse_args()
     train(args)
+
+
+if __name__ == '__main__':
+    main()

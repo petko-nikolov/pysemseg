@@ -7,6 +7,25 @@ import numpy as np
 import torch
 
 
+def save(
+    model, optimizer, model_dir, in_channels, n_classes, epoch, train_args):
+    save_dict = {
+        'model': model.state_dict(),
+        'model_args': {
+            'in_channels': 3,
+            'n_classes': n_classes,
+            **train_args.model_args,
+        },
+        'transformer_args': train_args.transformer_args,
+        'epoch': epoch,
+        'optimizer': optimizer.state_dict(),
+        'train_args': train_args.__dict__
+    }
+    torch.save(
+        save_dict,
+        os.path.join(model_dir, 'checkpoint-{}'.format(epoch)))
+
+
 def prompt_delete_dir(directory):
     if os.path.exists(directory):
         answer = input(
@@ -125,3 +144,17 @@ class ColorPalette:
         for mask, i in self.color_to_label.items():
             label_mask[np.where(np.all(palette_mask == mask, axis=-1))[:2]] = i
         return label_mask
+
+
+def load_model(checkpoint_path, model_cls, transformer_cls):
+    checkpoint = torch.load(
+        checkpoint_path,
+        map_location=lambda storage, location: storage)
+    model = model_cls(**checkpoint['args'].get('model_args', {}))
+    transformer = transformer_cls(
+        **checkpoint['args'].get('transformer_args', {}))
+    model.load_state_dict(checkpoint['state'], strict=True)
+    model.eval()
+    def predict(input_tensor):
+        return  model(transformer(input_tensor))
+    return predict
