@@ -7,8 +7,8 @@ import numpy as np
 import torch
 
 
-def save(
-    model, optimizer, model_dir, in_channels, n_classes, epoch, train_args):
+def save(model, optimizer, lr_scheduler, model_dir,
+         in_channels, n_classes, epoch, train_args):
     save_dict = {
         'model': model.state_dict(),
         'model_args': {
@@ -19,6 +19,7 @@ def save(
         'transformer_args': train_args.transformer_args,
         'epoch': epoch,
         'optimizer': optimizer.state_dict(),
+        'lr_scheduler': lr_scheduler.state_dict(),
         'train_args': train_args.__dict__
     }
     torch.save(
@@ -36,19 +37,21 @@ def prompt_delete_dir(directory):
             sys.exit(1)
 
 
-def restore(checkpoint_path, model, optimizer=None, restore_cpu=False, strict=True):
+def restore(checkpoint_path, model, optimizer=None, lr_scheduler=None, restore_cpu=False, strict=True):
     checkpoint = torch.load(
         checkpoint_path,
         map_location=lambda storage, location: storage if restore_cpu else None)
     model.load_state_dict(checkpoint['state'], strict=strict)
     if optimizer is not None and strict:
         optimizer.load_state_dict(checkpoint['optimizer'])
+    if lr_scheduler is not None and 'lr_scheduler' in checkpoint:
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
     return checkpoint['epoch']
 
 
 def get_latest_checkpoint(model_dir):
     def key_fn(path):
-        matches = re.match('checkpoint-(\d+)', os.path.basename(path))
+        matches = re.match(r'checkpoint-(\d+)', os.path.basename(path))
         return int(matches.groups()[0])
     return sorted(
         glob.glob(os.path.join(model_dir, 'checkpoint-*')),

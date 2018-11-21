@@ -48,6 +48,7 @@ def define_args():
                         required=False,
                         help='Optimizer args.')
     parser.add_argument('--lr_scheduler', type=str, required=False,
+                        default='lr_schedulers.ConstantLR',
                         help='Learning rate scheduler type.')
     parser.add_argument('--lr_scheduler_args', type=json.loads, default={},
                         required=False,
@@ -231,13 +232,15 @@ def train(args):
         args.checkpoint = get_latest_checkpoint(args.model_dir)
         assert args.checkpoint is not None
 
+    lr_scheduler_cls = import_class_module(args.lr_scheduler)
+    lr_scheduler = lr_scheduler_cls(optimizer, **args.lr_scheduler_args)
+
     if args.checkpoint:
         start_epoch = restore(
-            args.checkpoint, model, optimizer, strict=not args.allow_missing_keys) + 1
+            args.checkpoint, model, optimizer, lr_scheduler,
+            strict=not args.allow_missing_keys) + 1
 
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
-
-    weights=None
+    weights = None
     if args.weights:
         weights = _get_class_weights(
             args.weights, train_dataset.number_of_classes, args.cuda)
@@ -262,8 +265,8 @@ def train(args):
             if epoch % args.save_model_frequency == 0:
                 save(
                     model, optimizer, args.model_dir,
-                    train_loader.dataset.in_channels,
-                    train_loader.dataset.n_classes,
+                    3,
+                    train_loader.dataset.number_of_classes,
                     epoch, args)
             lr_scheduler.step()
 
