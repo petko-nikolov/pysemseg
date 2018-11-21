@@ -1,7 +1,6 @@
 from .base import SegmentationDataset
 from .pascal_voc.pascal import PascalVOCSegmentation, PascalVOCTransform
 from .camvid import CamVid, CamVidTransform
-from .handlers import create_dataset
 from .transformer import DatasetTransformer
 
 

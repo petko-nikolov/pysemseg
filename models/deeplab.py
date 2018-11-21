@@ -126,7 +126,8 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet50(output_stride=16, pretrained=False):
+def resnet50(output_stride=16, pretrained=False, multi_grid=(1,2,4),
+             add_blocks=0):
     assert output_stride in [8, 16]
     rate3  = 16 // output_stride
     stride3 = 1 if rate3 == 2 else 2
@@ -150,10 +151,22 @@ def resnet50(output_stride=16, pretrained=False):
         {
             'stride': 1,
             'n_layers': 3,
-            'dilations': [2] * 3,
+            'dilations': [rate3 * 2 * mg for mg in multi_grid],
             'channels': 512
         }
     ]
+    rate = rate3 * 4
+    for _ in range(add_blocks):
+        dilations = [rate * mg for mg in multi_grid]
+        blocks.append(
+            {
+                'stride': 1,
+                'n_layers': 3,
+                'dilations': dilations,
+                'channels': 512
+            }
+        )
+
     resnet = ResNet(3, blocks)
 
     if pretrained:
@@ -162,7 +175,7 @@ def resnet50(output_stride=16, pretrained=False):
 
     return resnet
 
-def resnet101(output_stride=16, pretrained=False):
+def resnet101(output_stride=16, pretrained=False, multi_grid=(1,2,4)):
     assert output_stride in [8, 16]
     rate3  = 16 // output_stride
     stride3 = 1 if rate3 == 2 else 2
@@ -186,28 +199,39 @@ def resnet101(output_stride=16, pretrained=False):
         {
             'stride': 1,
             'n_layers': 3,
-            'dilations': [2] * 3,
+            'dilations': [rate3 * 2 * mg for mg in multi_grid],
             'channels': 512
         }
     ]
+    rate = rate3 * 4
+    for _ in range(add_blocks):
+        dilations = [rate * mg for mg in multi_grid]
+        blocks.append(
+            {
+                'stride': 1,
+                'n_layers': 3,
+                'dilations': dilations,
+                'channels': 512
+            }
+        )
     return ResNet(3, blocks)
 
 
 class ASPPModule(nn.Module):
-    def __init__(self, in_channels, out_channels, multi_grid):
+    def __init__(self, in_channels, out_channels, rates):
         super().__init__()
-        assert len(multi_grid) == 3
+        assert len(rates) == 3
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1,
                                bias=False)
         self.conv2 = nn.Conv2d(
-            in_channels, out_channels, kernel_size=3, dilation=multi_grid[0],
-            padding=multi_grid[0], bias=False)
+            in_channels, out_channels, kernel_size=3, dilation=rates[0],
+            padding=rates[0], bias=False)
         self.conv3 = nn.Conv2d(
-            in_channels, out_channels, kernel_size=3, dilation=multi_grid[1],
-            padding=multi_grid[1], bias=False)
+            in_channels, out_channels, kernel_size=3, dilation=rates[1],
+            padding=rates[1], bias=False)
         self.conv4 = nn.Conv2d(
-            in_channels, out_channels, kernel_size=3, dilation=multi_grid[2],
-            padding=multi_grid[2], bias=False)
+            in_channels, out_channels, kernel_size=3, dilation=rates[2],
+            padding=rates[2], bias=False)
         self.global_avg_pool = nn.Sequential(
             nn.AdaptiveAvgPool2d((1,1)),
             nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
@@ -230,10 +254,12 @@ class ASPPModule(nn.Module):
         return x
 
 class DeepLabV3(nn.Module):
-    def __init__(self, channels, n_classes, backbone_model, aspp_module):
+    def __init__(self, channels, n_classes, backbone_model, aspp_module,
+                 finetune_bn):
         super().__init__()
         self.backbone = backbone_model
         self.aspp = aspp_module
+        self.finetune_bn = finetune_bn
         self.score = nn.Sequential(
             nn.Conv2d(channels, channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(channels),
@@ -249,22 +275,34 @@ class DeepLabV3(nn.Module):
         x = self.score(x)
         return x
 
+    def train(self, mode=True):
+        super().train(mode)
+        if not self.finetune_bn:
+            for module in self.modules():
+                if isinstance(module, nn.BatchNorm2d):
+                    module.train(False)
+
 
 class DeepLabV3ResNet50(DeepLabV3):
     def __init__(self, in_channels, n_classes, output_stride=16,
-                 multi_grid=[6, 12, 18]):
+                 aspp_rates=[6, 12, 18], multi_grid=[1, 2, 4],
+                 finetune_bn=True):
         assert in_channels == 3
-        resnet = resnet50(output_stride=output_stride, pretrained=True)
+        resnet = resnet50(
+            output_stride=output_stride, pretrained=True,
+            multi_grid=multi_grid)
         rate = 2 if output_stride == 8 else 1
-        aspp = ASPPModule(2048, 256, [rate * mg for mg in multi_grid])
-        super().__init__(256, n_classes, resnet, aspp)
+        aspp = ASPPModule(2048, 256, aspp_rates)
+        super().__init__(256, n_classes, resnet, aspp, finetune_bn)
 
 
 class DeepLabV3ResNet101(DeepLabV3):
     def __init__(self, in_channels, n_classes, output_stride=16,
-                 multi_grid=[6, 12, 18]):
+                 aspp_rates=[6, 12, 18], multi_grid=[1, 2, 4],
+                 finetune_bn=True):
         assert in_channels == 3
-        resnet = resnet101(output_stride=output_stride, pretrained=True)
-        rate = 2 if output_stride == 8 else 1
-        aspp = ASPPModule(2048, 256, [rate * mg for mg in multi_grid])
-        super().__init__(256, n_classes, resnet, aspp)
+        resnet = resnet101(
+            output_stride=output_stride, pretrained=True,
+            multi_grid=multi_grid)
+        aspp = ASPPModule(2048, 256, aspp_rates)
+        super().__init__(256, n_classes, resnet, aspp, finetune_bn)
