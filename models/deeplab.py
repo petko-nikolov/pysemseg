@@ -292,11 +292,11 @@ class DeepLabV3ResNet50(DeepLabV3):
             output_stride=output_stride, pretrained=True,
             multi_grid=multi_grid)
         rate = 2 if output_stride == 8 else 1
-        aspp = ASPPModule(2048, 256, aspp_rates)
+        aspp = ASPPModule(2048, 256, [r * rate for r in aspp_rates])
         super().__init__(256, n_classes, resnet, aspp, finetune_bn)
 
 
-class DeepLabV3ResNet101(DeepLabV3):
+class DeepLabV3Reaspp_ratessNet101(DeepLabV3):
     def __init__(self, in_channels, n_classes, output_stride=16,
                  aspp_rates=[6, 12, 18], multi_grid=[1, 2, 4],
                  finetune_bn=True):
@@ -304,5 +304,5 @@ class DeepLabV3ResNet101(DeepLabV3):
         resnet = resnet101(
             output_stride=output_stride, pretrained=True,
             multi_grid=multi_grid)
-        aspp = ASPPModule(2048, 256, aspp_rates)
+        aspp = ASPPModule(2048, 256, [r * rate for r in aspp_rates])
         super().__init__(256, n_classes, resnet, aspp, finetune_bn)
