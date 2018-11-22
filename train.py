@@ -263,11 +263,8 @@ def train(args):
                 model, validate_loader, criterion, logger, epoch,
                 visual_logger, args.cuda)
             if epoch % args.save_model_frequency == 0:
-                save(
-                    model, optimizer, args.model_dir,
-                    3,
-                    train_loader.dataset.number_of_classes,
-                    epoch, args)
+                save(model, optimizer, lr_scheduler, args.model_dir, 3,
+                     train_loader.dataset.number_of_classes, epoch, args)
             lr_scheduler.step()
 
 
