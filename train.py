@@ -18,7 +18,7 @@ import datasets
 from utils import (
     prompt_delete_dir, restore, tensor_to_numpy, import_class_module,
     flatten_dict, get_latest_checkpoint, save)
-from logger import StepLogger
+from logger import ConsoleLogger
 
 
 def define_args():
@@ -174,58 +174,90 @@ def _get_class_weights(weights_json_str, n_classes, cuda=False):
     return weights
 
 
+def _create_data_loaders(
+        data_dir, dataset_cls, transformer_cls, transformer_args,
+        train_batch_size, val_batch_size, num_workers):
+    train_dataset = datasets.create_dataset(
+        data_dir, dataset_cls, transformer_cls, transformer_args, mode='train')
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=train_batch_size,
+        shuffle=True, num_workers=num_workers)
+
+    validate_dataset = datasets.create_dataset(
+        data_dir, dataset_cls, transformer_cls, transformer_args, mode='val')
+
+    validate_loader = torch.utils.data.DataLoader(
+        validate_dataset, batch_size=val_batch_size,
+        shuffle=False, num_workers=num_workers)
+
+    return train_loader, validate_loader
+
+
+def _store_args(args, model_dir):
+    with open(os.path.join(model_dir, 'args.json'), 'w') as args_file:
+        json.dump(args.__dict__, args_file)
+
+
+def _set_seed(seed, cuda):
+    torch.manual_seed(seed)
+    if cuda:
+        torch.cuda.manual_seed(seed)
+
+
 def train(args):
     if not args.continue_training:
         prompt_delete_dir(args.model_dir)
         os.makedirs(args.model_dir)
 
-    # store args
-    with open(os.path.join(args.model_dir, 'args.json'), 'w') as args_file:
-        json.dump(args.__dict__, args_file)
+    _store_args(args, args.model_dir)
 
     # seed torch and cuda
     args.cuda = not args.no_cuda and torch.cuda.is_available()
-    torch.manual_seed(args.seed)
-    if args.cuda:
-        torch.cuda.manual_seed(args.seed)
+    _set_seed(args.seed, args.cuda)
 
-    # train dataset loading
     dataset_cls = import_class_module(args.dataset)
     transformer_cls = import_class_module(args.transformer)
 
-    train_dataset = datasets.create_dataset(
-        args.data_dir, dataset_cls, transformer_cls, mode='train')
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size,
-        shuffle=True, num_workers=args.num_workers)
-
-    # validation dataset loading
-    validate_dataset = datasets.create_dataset(
-        args.data_dir, dataset_cls, transformer_cls, mode='val')
-
-    validate_loader = torch.utils.data.DataLoader(
-        validate_dataset, batch_size=args.test_batch_size,
-        shuffle=False, num_workers=args.num_workers)
+    train_loader, validate_loader = _create_data_loaders(
+        args.data_dir, dataset_cls, transformer_cls,  args.transformer_args,
+        args.batch_size,  args.test_batch_size, args.num_workers
+    )
 
     visual_logger = VisdomLogger(
-        log_directory=args.model_dir, color_palette=train_dataset.color_palette,
-        continue_logging=args.continue_training)
+        log_directory=args.model_dir,
+        color_palette=train_loader.dataset.color_palette,
+        continue_logging=args.continue_training
+    )
 
     visual_logger.log_args(args.__dict__)
 
-    # initialize model
     model_class = import_class_module(args.model)
     model = model_class(
-        in_channels=3, n_classes=train_dataset.number_of_classes)
+        in_channels=train_loader.dataset.in_channels,
+        n_classes=train_loader.dataset.number_of_classes
+    )
 
-    # transfer to cuda
+    weights = (
+        _get_class_weights(args.weights, train_dataset.number_of_classes,
+                           args.cuda)
+        if args.weights else None
+    )
+
+    criterion = torch.nn.CrossEntropyLoss(
+        weight=weights, reduction=args.loss_reduction,
+        ignore_index=train_loader.dataset.ignore_index
+    )
+
     if args.cuda:
         model = model.cuda()
+        criterion = criterion.cuda()
 
     optimizer_class = import_class_module('torch.optim.' + args.optimizer)
     optimizer = optimizer_class(
-        model.parameters(), lr=args.lr, **args.optimizer_args)
+        model.parameters(), lr=args.lr, **args.optimizer_args
+    )
+
     start_epoch = 0
 
     if args.continue_training:
@@ -240,21 +272,9 @@ def train(args):
             args.checkpoint, model, optimizer, lr_scheduler,
             strict=not args.allow_missing_keys) + 1
 
-    weights = None
-    if args.weights:
-        weights = _get_class_weights(
-            args.weights, train_dataset.number_of_classes, args.cuda)
-
-    criterion = torch.nn.CrossEntropyLoss(
-        weight=weights, reduction=args.loss_reduction,
-        ignore_index=train_dataset.ignore_index)
-
-    if args.cuda:
-        criterion = criterion.cuda()
-
     log_filepath = os.path.join(args.model_dir, 'train.log')
 
-    with StepLogger(filename=log_filepath) as logger:
+    with ConsoleLogger(filename=log_filepath) as logger:
         for epoch in range(start_epoch, start_epoch + args.epochs):
             train_epoch(
                 model, train_loader, criterion, optimizer, lr_scheduler,
@@ -263,7 +283,8 @@ def train(args):
                 model, validate_loader, criterion, logger, epoch,
                 visual_logger, args.cuda)
             if epoch % args.save_model_frequency == 0:
-                save(model, optimizer, lr_scheduler, args.model_dir, 3,
+                save(model, optimizer, lr_scheduler, args.model_dir,
+                     train_loader.dataset.in_channels,
                      train_loader.dataset.number_of_classes, epoch, args)
             lr_scheduler.step()
 

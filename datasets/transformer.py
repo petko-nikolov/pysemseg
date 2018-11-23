@@ -33,3 +33,7 @@ class DatasetTransformer(Dataset):
     @property
     def ignore_index(self):
         return self.dataset.ignore_index
+
+    @property
+    def in_channels(self):
+        return self.dataset.in_channels

@@ -23,3 +23,7 @@ class SegmentationDataset(Dataset, metaclass=ABCMeta):
     @property
     def ignore_index(self):
         return None
+
+    @property
+    def in_channels(self):
+        return 3

@@ -4,7 +4,7 @@ from .camvid import CamVid, CamVidTransform
 from .transformer import DatasetTransformer
 
 
-def create_dataset(data_dir, dataset_cls, transformer_cls, mode):
+def create_dataset(data_dir, dataset_cls, transformer_cls, transformer_args, mode):
     dataset = dataset_cls(data_dir, mode)
-    transformer = transformer_cls(mode)
+    transformer = transformer_cls(mode=mode, **transformer_args)
     return DatasetTransformer(dataset, transformer, mode)

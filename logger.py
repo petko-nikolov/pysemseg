@@ -2,7 +2,7 @@ import pprint
 import json
 
 
-class StepLogger():
+class ConsoleLogger():
 
     def __init__(self, filename=None):
         self.filename = filename
