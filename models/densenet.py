@@ -168,28 +168,22 @@ class FCDenseNet(nn.Module):
         return x
 
 
-class FCDenseNet56(FCDenseNet):
-    def __init__(self, in_channels, n_classes):
-        super().__init__(
-            in_channels, n_classes, growth_rate=12,
-            n_init_features=48, drop_rate=0.2, blocks=(4,) * 5,
-            efficient=True
-        )
+def fcdensenet56(in_channels, n_classes):
+    return FCDenseNet(
+        in_channels, n_classes, growth_rate=12, n_init_features=48,
+        drop_rate=0.2, blocks=(4,) * 5, efficient=True
+    )
 
 
-class FCDenseNet67(FCDenseNet):
-    def __init__(self, in_channels, n_classes):
-        super().__init__(
-            in_channels, n_classes, growth_rate=16,
-            n_init_features=48, drop_rate=0.2, blocks=(5,) * 5,
-            efficient=True
-        )
+def fcdensenet67(in_channels, n_classes):
+    return FCDenseNet(
+        in_channels, n_classes, growth_rate=16, n_init_features=48,
+        drop_rate=0.2, blocks=(5,) * 5, efficient=True
+    )
 
 
-class FCDenseNet103(FCDenseNet):
-    def __init__(self, in_channels, n_classes):
-        super().__init__(
-            in_channels, n_classes, growth_rate=16,
-            n_init_features=48, drop_rate=0.2, blocks=(4, 5, 7, 10, 12, 15),
-            efficient=True
-        )
+def fcdensenet103(in_channels, n_classes):
+    return FCDenseNet(
+        in_channels, n_classes, growth_rate=16, n_init_features=48,
+        drop_rate=0.2, blocks=(4, 5, 7, 10, 12, 15),  efficient=True
+    )

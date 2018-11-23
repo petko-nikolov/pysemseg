@@ -62,8 +62,8 @@ def define_args():
                         help='learning rate (default: 0.001)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
-                        help='random seed (default: 1)')
+    parser.add_argument('--seed', type=int, default=8861, metavar='S',
+                        help='random seed (default: 8861)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='logging training status frequency')
     parser.add_argument('--log-images-interval', type=int, default=200, metavar='N',
@@ -201,6 +201,7 @@ def _store_args(args, model_dir):
 
 def _set_seed(seed, cuda):
     torch.manual_seed(seed)
+    np.random.seed(seed)
     if cuda:
         torch.cuda.manual_seed(seed)
 

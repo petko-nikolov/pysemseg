@@ -126,7 +126,7 @@ class ResNet(nn.Module):
         return x
 
 
-def _resnet(layers, in_channels=3, output_stride=16, pretrained=False,
+def _resnet(layers, pretrained_model=None, in_channels=3, output_stride=16,
             multi_grid=(1, 2, 4), add_blocks=0):
     assert output_stride in [8, 16]
     rate3  = 16 // output_stride
@@ -145,7 +145,7 @@ def _resnet(layers, in_channels=3, output_stride=16, pretrained=False,
         {
             'stride': stride3,
             'n_layers': layers[2],
-            'dilations': [rate3] * 6,
+            'dilations': [rate3] * layers[2],
             'channels': 256
         },
         {
@@ -167,19 +167,42 @@ def _resnet(layers, in_channels=3, output_stride=16, pretrained=False,
             }
         )
     resnet = ResNet(in_channels, blocks)
-    if pretrained:
-        resnet.load_pretrained_model(
-            'https://download.pytorch.org/models/resnet50-19c8e357.pth')
+    if pretrained_model is not None:
+        resnet.load_pretrained_model(pretrained_model)
+
 
     return resnet
 
 
-def _resnet50(**kwargs):
-    return _resnet([3, 4, 6, 3], **kwargs)
+RESNET_CKPT = {
+    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
+    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth'
+}
 
 
-def _resnet100(**kwargs):
-    return _resnet([3, 4, 23, 3], **kwargs)
+def _resnet50(pretrained=True, **kwargs):
+    return _resnet(
+        [3, 4, 6, 3],
+        pretrained_model=RESNET_CKPT['resnet50'] if pretrained else None,
+        **kwargs
+    )
+
+
+def _resnet101(pretrained=True, **kwargs):
+    return _resnet(
+        [3, 4, 23, 3],
+        pretrained_model=RESNET_CKPT['resnet101'] if pretrained else None,
+        **kwargs
+    )
+
+
+def _resnet152(pretrained=True, **kwargs):
+    return _resnet(
+        [3, 8, 36, 3],
+        pretrained_model=RESNET_CKPT['resnet152'] if pretrained else None
+        **kwargs
+    )
 
 
 class ASPPModule(nn.Module):
@@ -220,18 +243,26 @@ class ASPPModule(nn.Module):
         x = self.final_conv(x)
         return x
 
-class DeepLabV3(nn.Module):
-    def __init__(self, channels, n_classes, backbone_model, aspp_module,
-                 finetune_bn):
+class Deeplab(nn.Module):
+    def __init__(
+            self, in_channels, n_classes, backbone_cls, score_channels=256,
+            aspp_rates=[6, 12, 18], pretrained=True, output_stride=16,
+            multi_grid=[1, 2, 4], finetune_bn=True):
         super().__init__()
-        self.backbone = backbone_model
-        self.aspp = aspp_module
+        self.backbone = backbone_cls(
+            pretrained=pretrained,
+            in_channels=in_channels,
+            output_stride=output_stride,
+            multi_grid=multi_grid
+        )
+        rate = 2 if output_stride == 8 else 1
+        self.aspp = ASPPModule(2048, 256, [r * rate for r in aspp_rates])
         self.finetune_bn = finetune_bn
         self.score = nn.Sequential(
-            nn.Conv2d(channels, channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels),
+            nn.Conv2d(score_channels, score_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(score_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels, n_classes, kernel_size=1)
+            nn.Conv2d(score_channels, n_classes, kernel_size=1)
         )
 
     def forward(self, x):
@@ -252,26 +283,13 @@ class DeepLabV3(nn.Module):
                     module.train(False)
 
 
-class DeepLabV3ResNet50(DeepLabV3):
-    def __init__(self, in_channels, n_classes, output_stride=16,
-                 aspp_rates=[6, 12, 18], multi_grid=[1, 2, 4],
-                 finetune_bn=True):
-        assert in_channels == 3
-        resnet = _resnet50(
-            output_stride=output_stride, pretrained=True,
-            multi_grid=multi_grid)
-        rate = 2 if output_stride == 8 else 1
-        aspp = ASPPModule(2048, 256, [r * rate for r in aspp_rates])
-        super().__init__(256, n_classes, resnet, aspp, finetune_bn)
+def deeplabv3_resnet50(in_channels, n_classes, **kwargs):
+    return Deeplab(in_channels, n_classes, _resnet50, **kwargs)
 
 
-class DeepLabV3ResNet101(DeepLabV3):
-    def __init__(self, in_channels, n_classes, output_stride=16,
-                 aspp_rates=[6, 12, 18], multi_grid=[1, 2, 4],
-                 finetune_bn=True):
-        assert in_channels == 3
-        resnet = _resnet101(
-            output_stride=output_stride, pretrained=True,
-            multi_grid=multi_grid)
-        aspp = ASPPModule(2048, 256, [r * rate for r in aspp_rates])
-        super().__init__(256, n_classes, resnet, aspp, finetune_bn)
+def deeplabv3_resnet101(in_channels, n_classes, **kwargs):
+    return Deeplab(in_channels, n_classes, _resnet101, **kwargs)
+
+
+def deeplabv3_resnet152(in_channels, n_classes, **kwargs):
+    return Deeplab(in_channels, n_classes, _resnet152, **kwargs)
