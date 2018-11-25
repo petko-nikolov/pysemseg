@@ -65,12 +65,18 @@ def tensor_to_numpy(tensor):
     return tensor.numpy()
 
 
-def import_class_module(name):
-    components = name.split('.')
-    mod = __import__(components[0])
-    for comp in components[1:]:
-        mod = getattr(mod, comp)
-    return mod
+def import_type(name, modules=[]):
+    type_paths = [name] + [m + '.' + name for m in modules]
+    for tp in type_paths:
+        try:
+            components = tp.split('.')
+            mod = __import__(components[0])
+            for comp in components[1:]:
+                mod = getattr(mod, comp)
+            return mod
+        except:
+            pass
+    raise ImportError(name + 'not found')
 
 
 def flatten_dict(dict_obj):

@@ -16,7 +16,7 @@ from evaluate import evaluate
 
 import datasets
 from utils import (
-    prompt_delete_dir, restore, tensor_to_numpy, import_class_module,
+    prompt_delete_dir, restore, tensor_to_numpy, import_type,
     flatten_dict, get_latest_checkpoint, save)
 from logger import ConsoleLogger
 
@@ -217,8 +217,8 @@ def train(args):
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     _set_seed(args.seed, args.cuda)
 
-    dataset_cls = import_class_module(args.dataset)
-    transformer_cls = import_class_module(args.transformer)
+    dataset_cls = import_type(args.dataset, ['datasets'])
+    transformer_cls = import_type(args.transformer, ['datasets'])
 
     train_loader, validate_loader = _create_data_loaders(
         args.data_dir, dataset_cls, transformer_cls,  args.transformer_args,
@@ -233,7 +233,7 @@ def train(args):
 
     visual_logger.log_args(args.__dict__)
 
-    model_class = import_class_module(args.model)
+    model_class = import_type(args.model, ['models'])
     model = model_class(
         in_channels=train_loader.dataset.in_channels,
         n_classes=train_loader.dataset.number_of_classes
@@ -254,7 +254,7 @@ def train(args):
         model = model.cuda()
         criterion = criterion.cuda()
 
-    optimizer_class = import_class_module('torch.optim.' + args.optimizer)
+    optimizer_class = import_type(args.optimizer, ['torch.optim'])
     optimizer = optimizer_class(
         model.parameters(), lr=args.lr, **args.optimizer_args
     )
@@ -265,7 +265,9 @@ def train(args):
         args.checkpoint = get_latest_checkpoint(args.model_dir)
         assert args.checkpoint is not None
 
-    lr_scheduler_cls = import_class_module(args.lr_scheduler)
+    lr_scheduler_cls = import_type(
+        args.lr_scheduler, ['lr_schedulers', 'torch.optim.lr_scheduler']
+    )
     lr_scheduler = lr_scheduler_cls(optimizer, **args.lr_scheduler_args)
 
     if args.checkpoint:
