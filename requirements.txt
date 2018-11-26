@@ -1,3 +1,4 @@
+pytorh>=0.4.4
 tqdm>=4.19.5
 tensorboardX>=1.1
 ipython>=6.2.1
