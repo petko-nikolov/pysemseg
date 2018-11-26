@@ -1,2 +1,3 @@
 *.swp
 *.pyc
+pysemseg.egg-info/
