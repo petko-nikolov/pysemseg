@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 from abc import ABCMeta, abstractmethod
-from utils import ColorPalette
+from pysemseg.utils import ColorPalette
 
 
 class SegmentationDataset(Dataset, metaclass=ABCMeta):

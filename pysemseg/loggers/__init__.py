@@ -1,2 +1,3 @@
-from loggers.tensorboard_logger import TensorboardLogger
-from loggers.visdom_logger import VisdomLogger
+from .tensorboard_logger import TensorboardLogger
+from .visdom_logger import VisdomLogger
+from .console_logger import ConsoleLogger

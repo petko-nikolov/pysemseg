@@ -1,8 +1,9 @@
 import os
 from torchvision.transforms import Normalize
-from datasets.base import SegmentationDataset
 import cv2
-import transforms
+
+from pysemseg.datasets.base import SegmentationDataset
+from pysemseg import transforms
 
 
 PASCAL_CLASSES = [

@@ -1,6 +1,6 @@
 from tensorboardX import SummaryWriter
 import numpy as np
-from utils import flatten_dict, ColorPalette
+from pysemseg.utils import flatten_dict, ColorPalette
 
 
 class TensorboardLogger:

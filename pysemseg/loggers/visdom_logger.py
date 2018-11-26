@@ -3,8 +3,8 @@ import numpy as np
 import cv2
 import visdom
 
-from utils import flatten_dict
-from transforms import ResizeBatch
+from pysemseg.utils import flatten_dict
+from pysemseg.transforms import ResizeBatch
 
 
 IMAGES_WIDTH = 128

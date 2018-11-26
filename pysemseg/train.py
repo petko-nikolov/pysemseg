@@ -8,17 +8,15 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
-from tensorboardX import SummaryWriter
 
-from metrics import SegmentationMetrics
-from loggers import TensorboardLogger, VisdomLogger
-from evaluate import evaluate
-
-import datasets
-from utils import (
+from pysemseg import datasets
+from pysemseg.metrics import SegmentationMetrics
+from pysemseg.loggers import TensorboardLogger, VisdomLogger, ConsoleLogger
+from pysemseg.evaluate import evaluate
+from pysemseg.utils import (
     prompt_delete_dir, restore, tensor_to_numpy, import_type,
-    flatten_dict, get_latest_checkpoint, save)
-from logger import ConsoleLogger
+    flatten_dict, get_latest_checkpoint, save
+)
 
 
 def define_args():
@@ -229,8 +227,8 @@ def train(args):
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     _set_seed(args.seed, args.cuda)
 
-    dataset_cls = import_type(args.dataset, ['datasets'])
-    transformer_cls = import_type(args.transformer, ['datasets'])
+    dataset_cls = import_type(args.dataset, ['pysemseg.datasets'])
+    transformer_cls = import_type(args.transformer, ['pysemseg.datasets'])
 
     train_loader, validate_loader = _create_data_loaders(
         args.data_dir, dataset_cls, transformer_cls,  args.transformer_args,
@@ -245,7 +243,7 @@ def train(args):
 
     visual_logger.log_args(args.__dict__)
 
-    model_class = import_type(args.model, ['models'])
+    model_class = import_type(args.model, ['pysemseg.models'])
     model = model_class(
         in_channels=train_loader.dataset.in_channels,
         n_classes=train_loader.dataset.number_of_classes
@@ -278,7 +276,7 @@ def train(args):
         assert args.checkpoint is not None
 
     lr_scheduler_cls = import_type(
-        args.lr_scheduler, ['lr_schedulers', 'torch.optim.lr_scheduler']
+        args.lr_scheduler, ['pysemseg.lr_schedulers', 'torch.optim.lr_scheduler']
     )
     lr_scheduler = lr_scheduler_cls(optimizer, **args.lr_scheduler_args)
 

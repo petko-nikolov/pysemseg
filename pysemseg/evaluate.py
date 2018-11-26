@@ -1,8 +1,8 @@
 import numpy as np
 from torch.autograd import Variable
 import torch
-from metrics import SegmentationMetrics
-from utils import tensor_to_numpy, flatten_dict
+from pysemseg.metrics import SegmentationMetrics
+from pysemseg.utils import tensor_to_numpy, flatten_dict
 
 
 def evaluate(

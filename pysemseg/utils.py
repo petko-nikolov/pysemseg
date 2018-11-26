@@ -77,7 +77,7 @@ def import_type(name, modules=[]):
             return mod
         except:
             pass
-    raise ImportError(name + 'not found')
+    raise ImportError(name + ' not found')
 
 
 def flatten_dict(dict_obj):

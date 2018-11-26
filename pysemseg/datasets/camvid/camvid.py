@@ -3,9 +3,9 @@ import glob
 from torchvision.transforms import Normalize
 import cv2
 
-import transforms
-from datasets.base import SegmentationDataset
-from utils import ColorPalette
+from pysemseg import transforms
+from pysemseg.datasets.base import SegmentationDataset
+from pysemseg.utils import ColorPalette
 
 
 CAMVID_CLASSES = [
