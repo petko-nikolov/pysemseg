@@ -37,6 +37,9 @@ def define_args():
                               'datasets.handler module'))
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
+    parser.add_argument('--max-gpu-batch-size', type=int, default=None,
+                        help='Effective GPU batch size. Gradients will be'
+                             'accumulated to the batch-size before update.')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
@@ -68,8 +71,8 @@ def define_args():
                         help='logging training status frequency')
     parser.add_argument('--log-images-interval', type=int, default=200, metavar='N',
                         help='Frequency of logging images and larger plots')
-    parser.add_argument('--loss_reduction', type=str, default='elementwise_mean',
-                        choices=['elementwise_mean', 'sum'],
+    parser.add_argument('--loss_reduction', type=str, default='mean',
+                        choices=['mean', 'sum'],
                         help='Sum or average individual pixel losses.')
     parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
     parser.add_argument('--num-workers', type=int, default=1,
@@ -93,9 +96,34 @@ def define_args():
     return parser
 
 
+def train_step(model, optimizer, criterion,  inputs, targets, splits,
+               ignore_index, cuda, loss_reduction):
+    if cuda:
+        inputs, targets = inputs.cuda(), targets.cuda()
+    inputs = torch.split(inputs, splits, dim=0)
+    targets = torch.split(targets, splits, dim=0)
+    outputs = []
+    step_loss = torch.zeros(1)
+    if cuda:
+        total_loss = total_loss.cuda()
+    for input_data, target in zip(inputs, targets):
+        input_data, target = Variable(input_data), Variable(target)
+        output = model(input_data)
+        outputs.append(output)
+        loss = criterion(output, target)
+        step_loss += loss
+        if loss_reduction == 'mean':
+            loss = loss / torch.sum(target != ignore_index).float()
+        loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+    return torch.cat(outputs, dim=0), step_loss
+
+
 def train_epoch(
         model, loader, criterion, optimizer, lr_scheduler,
-        epoch, console_logger, visual_logger, cuda, log_interval):
+        epoch, console_logger, visual_logger, cuda, log_interval,
+        max_gpu_batch_size, loss_reduction):
     model.train()
 
     metrics = SegmentationMetrics(
@@ -109,39 +137,23 @@ def train_epoch(
         ignore_index=loader.dataset.ignore_index)
 
     for step, (ids, data, target) in enumerate(loader):
-        if cuda:
-            data, target = data.cuda(), target.cuda()
-
         start_time = time.time()
-
-        data, target = Variable(data), Variable(target)
-        output = model(data)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
+        output, loss = train_step(
+            model, optimizer, criterion, data, target, max_gpu_batch_size,
+            loader.dataset.ignore_index, cuda, loss_reduction
+        )
+        loss = loss / torch.sum(target != loader.dataset.ignore_index).float()
         output = F.softmax(output, dim=1)
         output, target, loss = [
             tensor_to_numpy(t.data) for t in [output, target, loss]
         ]
         predictions = np.argmax(output, axis=1)
-
-        if criterion.reduction == 'sum':
-            if loader.dataset.ignore_index:
-                loss = loss / np.sum(target != loader.dataset.ignore_index)
-            else:
-                loss = loss / np.prod(target.shape)
-
         metrics.add(predictions, target, float(loss))
-
         epoch_metrics.add(predictions, target, float(loss))
 
         if step % log_interval == 0:
-
             metrics_dict = metrics.metrics()
             metrics_dict['time'] = time.time() - start_time
-
             metrics_dict.pop('class')
             console_logger.log(step, epoch, loader, data, metrics_dict)
 
@@ -246,7 +258,7 @@ def train(args):
     )
 
     criterion = torch.nn.CrossEntropyLoss(
-        weight=weights, reduction=args.loss_reduction,
+        weight=weights, reduction='sum',
         ignore_index=train_loader.dataset.ignore_index
     )
 
@@ -281,7 +293,8 @@ def train(args):
         for epoch in range(start_epoch, start_epoch + args.epochs):
             train_epoch(
                 model, train_loader, criterion, optimizer, lr_scheduler,
-                epoch, logger, visual_logger, args.cuda, args.log_interval)
+                epoch, logger, visual_logger, args.cuda, args.log_interval,
+                args.max_gpu_batch_size or args.batch_size, args.loss_reduction)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
                 visual_logger, args.cuda)
