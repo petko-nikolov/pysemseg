@@ -4,6 +4,14 @@ from abc import ABCMeta
 import torchvision.models as models
 
 
+def _maybe_pad(x, size):
+    hpad = size[0] - x.shape[2]
+    wpad = size[1] - x.shape[3]
+    if hpad + wpad > 0:
+        x = F.pad(x, (0, wpad, 0, hpad, 0, 0, 0, 0 ))
+    return x
+
+
 class VGGFCN(nn.Module, metaclass=ABCMeta):
     def __init__(self, in_channels, n_classes):
         super().__init__()
@@ -80,9 +88,11 @@ class VGGFCN8(VGGFCN):
         pool4 = self.vgg16.features[-14:-7](pool3)
         pool5 = self.vgg16.features[-7:](pool4)
         pool5_upscaled = self.upscale5(self.classifier(pool5))
+        pool5_upscaled = _maybe_pad(pool5_upscaled, pool4.shape[2:])
         pool4_scores = self.score4(pool4)
         pool4_fused = pool4_scores + pool5_upscaled
         pool4_upscaled = self.upscale4(pool4_fused)
+        pool4_upscaled = _maybe_pad(pool4_upscaled, pool3.shape[2:])
         x = self.score3(pool3) + pool4_upscaled
         x = F.interpolate(x, size=(input_height, input_width),
                           mode='bilinear', align_corners=True)

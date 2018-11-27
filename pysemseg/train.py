@@ -171,6 +171,7 @@ def train_epoch(
             )
 
     visual_logger.log_metrics(epoch, epoch_metrics.metrics(), 'Train')
+    visual_logger.log_learning_rate(epoch, optimizer.param_groups[0]['lr'])
 
 
 def _get_class_weights(weights_json_str, n_classes, cuda=False):

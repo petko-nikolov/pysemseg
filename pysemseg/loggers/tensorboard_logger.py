@@ -28,3 +28,7 @@ class TensorboardLogger:
         for i in range(image.shape[0]):
             self.summary_writer.add_image(
                 "{}/{}/{}".format(prefix, name, i), combined_images[i], iteration)
+
+    def log_learning_rate(self, iteration, lr):
+        self.summary_writer.add_scalar('learning_rate', value, iteration)
+

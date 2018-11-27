@@ -73,3 +73,13 @@ class VisdomLogger:
             win=title,
             opts={'caption': title}
         )
+
+    def log_learning_rate(self, iteration, lr):
+            self.visdom.line(
+                np.array([lr]),
+                np.array([iteration]),
+                win='learning_rate',
+                update='append' if iteration > 0 else None,
+                opts={'title': 'Learning rate'}
+            )
+
