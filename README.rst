@@ -32,3 +32,28 @@ Datasets
 ========
 - `Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_
 - `CamVid <http://mi.eng.cam.ac.uk/research/projects/VideoRec/CamVid/>`_
+- Cityscapes [Upcoming ...]
+- ADE20K [Upcoming ...]
+
+
+Train a model from command line
+===============================
+
+The following is an example command to train a VGGFCN8 model on the Pascal VOC 2012 dataset. In addition to the dataset and the model, a transformer class should be passed (PascalVOCTransform in this case) - a callable where all input image and mask augmentations and tensor transforms are implemented. Run :code:`pysemseg-train -h` for a full list of options.
+
+.. code:: bash
+
+ pysemseg-train --model VGGFCN8 \
+    --data-dir ~/datasets/PascalVOC/ \
+    --dataset PascalVOCSegmentation \
+    --model-dir ~/models/vgg8_pascal_model/ \
+    --batch-size 4 \
+    --test-batch-size 1 \
+    --epochs 40 \
+    --lr 0.001 \
+    -- optimizer SGD \
+    -- optimizer_args '{"weight_decay": 0.0005, "momentum": 0.9}' \
+    --transformer PascalVOCTransform \
+    --lr_scheduler PolyLR \
+    --lr_scheduler_args '{"max_epochs": 40, "gamma": 0.8}'
+
