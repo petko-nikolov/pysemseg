@@ -103,7 +103,7 @@ def train_step(model, optimizer, criterion,  inputs, targets, splits,
     outputs = []
     step_loss = torch.zeros(1)
     if cuda:
-        total_loss = total_loss.cuda()
+        step_loss = step_loss.cuda()
     for input_data, target in zip(inputs, targets):
         input_data, target = Variable(input_data), Variable(target)
         output = model(input_data)
@@ -140,7 +140,10 @@ def train_epoch(
             model, optimizer, criterion, data, target, max_gpu_batch_size,
             loader.dataset.ignore_index, cuda, loss_reduction
         )
-        loss = loss / torch.sum(target != loader.dataset.ignore_index).float()
+        num_targets = torch.sum(target != loader.dataset.ignore_index).float()
+        if cuda:
+            num_targets = num_targets.cuda()
+        loss = loss / num_targets
         output = F.softmax(output, dim=1)
         output, target, loss = [
             tensor_to_numpy(t.data) for t in [output, target, loss]
@@ -247,7 +250,8 @@ def train(args):
     model_class = import_type(args.model, ['pysemseg.models'])
     model = model_class(
         in_channels=train_loader.dataset.in_channels,
-        n_classes=train_loader.dataset.number_of_classes
+        n_classes=train_loader.dataset.number_of_classes,
+        **args.model_args
     )
 
     weights = (

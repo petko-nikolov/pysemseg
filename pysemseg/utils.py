@@ -38,14 +38,15 @@ def prompt_delete_dir(directory):
 
 
 def restore(checkpoint_path, model, optimizer=None, lr_scheduler=None,
-            restore_cpu=False, strict=True):
+            restore_cpu=False, strict=True, continue_training=False):
     checkpoint = torch.load(
         checkpoint_path,
         map_location=lambda storage, location: storage if restore_cpu else None)
     model.load_state_dict(checkpoint['model'], strict=strict)
-    if optimizer is not None and strict:
+    if optimizer is not None and continue_training:
         optimizer.load_state_dict(checkpoint['optimizer'])
-    if lr_scheduler is not None and 'lr_scheduler' in checkpoint:
+    if (lr_scheduler is not None and 'lr_scheduler' in checkpoint and
+            continue_training):
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
     return checkpoint['epoch']
 

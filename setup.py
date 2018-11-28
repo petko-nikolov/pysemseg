@@ -25,6 +25,8 @@ requirements = [
     "numpy>=1.14.0",
     "scikit-image>=0.13.1",
     "visdom>=0.1.8.5"
+    "Cython==0.29.1",
+    "pycocotools==2.0.0"
 ]
 
 setup(
