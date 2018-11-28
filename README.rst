@@ -30,5 +30,5 @@ Models
 
 Datasets
 ========
-- `Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>_`
-- `CamVid <http://mi.eng.cam.ac.uk/research/projects/VideoRec/CamVid/>_`
+- `Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_
+- `CamVid <http://mi.eng.cam.ac.uk/research/projects/VideoRec/CamVid/>`_
