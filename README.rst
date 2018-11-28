@@ -10,7 +10,7 @@ with fine-grained annotations are small, so Transfer Learning is crucial for suc
 Installation
 =============
  
- Using pip:
+Using pip:
  
 .. code:: bash
 
