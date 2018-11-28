@@ -31,8 +31,7 @@ def define_args():
     parser.add_argument('--model-dir', type=str, required=True,
                         help='Path to store output data.')
     parser.add_argument('--dataset', type=str, required=True,
-                        help=('A dataset handler. Required to be defined inside'
-                              'datasets.handler module'))
+                        help=('Path to the dataset class including the module'))
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--max-gpu-batch-size', type=int, default=None,

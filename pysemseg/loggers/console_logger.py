@@ -1,5 +1,5 @@
-import pprint
 import json
+from pysemseg.utils import flatten_dict
 
 
 class ConsoleLogger():
@@ -17,7 +17,7 @@ class ConsoleLogger():
 
     def log(self, index, epoch, loader, data, metrics, mode='Train'):
         metric_str = ", ".join([
-            '{}:{:.6f}'.format(k, v) for k, v in metrics.items()
+            '{}:{:.6f}'.format(k, v) for k, v in flatten_dict(metrics).items()
         ])
         print('{} Epoch: {} [{}/{} ({:.0f}%)] [{}]'.format(
             mode, epoch, index * len(data), len(loader.dataset),
