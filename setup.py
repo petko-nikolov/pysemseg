@@ -45,4 +45,9 @@ setup(
 
     zip_safe=True,
     install_requires=requirements,
+    entry_points={
+        'console_scripts': [
+            'pysemseg-train=pysemseg.train:main'
+        ]
+    }
 )
