@@ -22,7 +22,7 @@ Models
 
 - FCN [`paper <https://people.eecs.berkeley.edu/~jonlong/long_shelhamer_fcn.pdf>`_] - FCN32, FCN16, FCN8 with pre-trained VGG16
 - UNet [`paper <https://people.eecs.berkeley.edu/~jonlong/long_shelhamer_fcn.pdf>`_]
-- Tiramisu (FC DenseNets)[`paper <https://arxiv.org/pdf/1611.09326.pdf>`_] - FC DenseNet 56, FC DenseNet 67, FC DensetNet 103
+- Tiramisu (FC DenseNets)[`paper <https://arxiv.org/pdf/1611.09326.pdf>`_] - FC DenseNet 56, FC DenseNet 67, FC DensetNet 103 with efficient checkpointing
 - DeepLab V3 [`paper <https://arxiv.org/pdf/1706.05587.pdf>`_] - Multi-grid, ASPP and BatchNorm fine-tuning with pre-trained resnets backbone
 - DeelLab V3+ [`paper <https://arxiv.org/pdf/1802.02611.pdf>`_] - [Upcoming ...]
 - RefineNet [`paper <https://arxiv.org/pdf/1611.06612.pdf>`_] - [Upcoming ...]
