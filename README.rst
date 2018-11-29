@@ -12,7 +12,7 @@ Installation
  
 Using pip:
  
-.. codeblock:: bash
+.. code:: bash
 
   pip  git+https://github.com/petko-nikolov/pysemseg
     
@@ -41,7 +41,7 @@ Train a model from command line
 
 The following is an example command to train a VGGFCN8 model on the Pascal VOC 2012 dataset. In addition to the dataset and the model, a transformer class should be passed (PascalVOCTransform in this case) - a callable where all input image and mask augmentations and tensor transforms are implemented. Run :code:`pysemseg-train -h` for a full list of options.
 
-.. codeblock:: bash
+.. code:: bash
 
  pysemseg-train \
     --model VGGFCN8 \
