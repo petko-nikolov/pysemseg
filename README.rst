@@ -53,10 +53,10 @@ The following is an example command to train a VGGFCN8 model on the Pascal VOC 2
     --epochs 40 \
     --lr 0.001 \
     -- optimizer SGD \
-    -- optimizer_args '{"weight_decay": 0.0005, "momentum": 0.9}' \
+    -- optimizer-args '{"weight_decay": 0.0005, "momentum": 0.9}' \
     --transformer PascalVOCTransform \
-    --lr_scheduler PolyLR \
-    --lr_scheduler_args '{"max_epochs": 40, "gamma": 0.8}'
+    --lr-scheduler PolyLR \
+    --lr-scheduler_args '{"max_epochs": 40, "gamma": 0.8}'
     
    
 or pass a YAML config
