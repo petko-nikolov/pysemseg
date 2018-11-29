@@ -43,10 +43,11 @@ The following is an example command to train a VGGFCN8 model on the Pascal VOC 2
 
 .. code:: bash
 
- pysemseg-train --model VGGFCN8 \
-    --data-dir ~/datasets/PascalVOC/ \
-    --dataset PascalVOCSegmentation \
+ pysemseg-train \
+    --model VGGFCN8 \
     --model-dir ~/models/vgg8_pascal_model/ \
+    --dataset PascalVOCSegmentation \
+    --data-dir ~/datasets/PascalVOC/ \
     --batch-size 4 \
     --test-batch-size 1 \
     --epochs 40 \
