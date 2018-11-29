@@ -26,7 +26,8 @@ requirements = [
     "scikit-image>=0.13.1",
     "visdom>=0.1.8.5"
     "Cython==0.29.1",
-    "pycocotools==2.0.0"
+    "pycocotools==2.0.0",
+    "ConfigArgParse==0.13.0"
 ]
 
 setup(
@@ -36,7 +37,7 @@ setup(
     author='Petko Nikolov',
     author_email='py.nikolov@gmail.com',
     url='https://github.com/petko-nikolov/pysemseg',
-    description='Pytorch library for training Deep Learning models forSemantic Segmentation',
+    description='Pytorch library for training Deep Learning models for Semantic Segmentation',
     long_description=readme,
     license='BSD',
 

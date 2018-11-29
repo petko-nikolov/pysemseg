@@ -1,11 +1,11 @@
 import os
-import argparse
+import ast
 import json
 import time
 import numpy as np
+import configargparse
 
 import torch
-import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 
@@ -20,11 +20,15 @@ from pysemseg.utils import (
 
 
 def define_args():
-    parser = argparse.ArgumentParser(description='PyTorch Segmentation Framework')
+    parser = configargparse.ArgParser(description='PyTorch Segmentation Framework',
+        config_file_parser_class=configargparse.YAMLConfigFileParser,
+    )
+    parser.add_argument(
+        '--config', is_config_file=True, required=False, help='Config file')
     parser.add_argument('--model', type=str, required=True,
                         help=('A path to the model including the module. '
                               'Should be resolvable'))
-    parser.add_argument('--model-args', type=json.loads, required=False, default={},
+    parser.add_argument('--model-args', type=ast.literal_eval, required=False, default={},
                         help=('Args passed to the model constructor'))
     parser.add_argument('--data-dir', type=str, required=True,
                         help='Path to the dataset root dir.')
@@ -44,18 +48,18 @@ def define_args():
     parser.add_argument('--optimizer', type=str, default='RMSprop',
                         required=False,
                         help='Optimizer type.')
-    parser.add_argument('--optimizer-args', type=json.loads, default={},
+    parser.add_argument('--optimizer-args', type=ast.literal_eval, default={},
                         required=False,
                         help='Optimizer args.')
     parser.add_argument('--lr-scheduler', type=str, required=False,
                         default='lr_schedulers.ConstantLR',
                         help='Learning rate scheduler type.')
-    parser.add_argument('--lr-scheduler-args', type=json.loads, default={},
+    parser.add_argument('--lr-scheduler-args', type=ast.literal_eval, default={},
                         required=False,
                         help='Learning rate scheduler args.')
     parser.add_argument('--transformer', type=str, required=False,
                         help='Transformer type')
-    parser.add_argument('--transformer-args', type=json.loads, default={},
+    parser.add_argument('--transformer-args', type=ast.literal_eval, default={},
                         required=False,
                         help='Transformer args.')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
@@ -80,8 +84,9 @@ def define_args():
     parser.add_argument('--save-model-frequency', type=int,
                         required=False, default=5,
                         help='Save model checkpoint every nth epoch.')
-    parser.add_argument('--weights', type=str, required=False,
-                        help=('Class weights passed as a JSON object, e.g:'
+    parser.add_argument('--weights', type=ast.literal_eval, required=False,
+                        help=('Class weights passed as a JSON or dict '
+                              'str representationobject, e.g:'
                               '{"0": 5.0, "2": 3.0}, missing classes get'
                               'weight one'))
     group = parser.add_mutually_exclusive_group()
@@ -178,7 +183,6 @@ def train_epoch(
 
 
 def _get_class_weights(weights_json_str, n_classes, device):
-    weights_obj = json.loads(weights_json_str)
     weights = np.ones(n_classes, dtype=np.float32)
     for k, v in weights_obj.items():
         weights[int(k)] = v
@@ -310,6 +314,7 @@ def train(args):
 def main():
     parser = define_args()
     args = parser.parse_args()
+    print(args)
     train(args)
 
 

@@ -6,7 +6,6 @@ import re
 import numpy as np
 import torch
 
-
 def save(model, optimizer, lr_scheduler, model_dir,
          in_channels, n_classes, epoch, train_args):
     save_dict = {

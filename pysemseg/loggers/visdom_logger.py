@@ -9,6 +9,7 @@ from pysemseg.transforms import ResizeBatch
 
 IMAGES_WIDTH = 128
 
+
 class VisdomLogger:
     def __init__(self, log_directory, color_palette, continue_logging=False):
         self.log_directory = log_directory
