@@ -6,8 +6,8 @@ from pysemseg.utils import tensor_to_numpy, flatten_dict
 
 
 def evaluate(
-        model, loader, criterion, console_logger, epoch, visual_logger,
-        cuda=False):
+        model, loader, criterion, console_logger, epoch,
+        visual_logger, device):
     model.eval()
 
     metrics = SegmentationMetrics(
@@ -18,8 +18,7 @@ def evaluate(
 
     with torch.no_grad():
         for step, (_, data, target) in enumerate(loader):
-            if cuda:
-                data, target = data.cuda(), target.cuda()
+            data, target = data.to(device), target.to(device)
 
             data, target = Variable(data), Variable(target)
             output = model(data)

@@ -24,7 +24,7 @@ def define_args():
     parser.add_argument('--model', type=str, required=True,
                         help=('A path to the model including the module. '
                               'Should be resolvable'))
-    parser.add_argument('--model_args', type=json.loads, required=False, default={},
+    parser.add_argument('--model-args', type=json.loads, required=False, default={},
                         help=('Args passed to the model constructor'))
     parser.add_argument('--data-dir', type=str, required=True,
                         help='Path to the dataset root dir.')
@@ -44,18 +44,18 @@ def define_args():
     parser.add_argument('--optimizer', type=str, default='RMSprop',
                         required=False,
                         help='Optimizer type.')
-    parser.add_argument('--optimizer_args', type=json.loads, default={},
+    parser.add_argument('--optimizer-args', type=json.loads, default={},
                         required=False,
                         help='Optimizer args.')
-    parser.add_argument('--lr_scheduler', type=str, required=False,
+    parser.add_argument('--lr-scheduler', type=str, required=False,
                         default='lr_schedulers.ConstantLR',
                         help='Learning rate scheduler type.')
-    parser.add_argument('--lr_scheduler_args', type=json.loads, default={},
+    parser.add_argument('--lr-scheduler-args', type=json.loads, default={},
                         required=False,
                         help='Learning rate scheduler args.')
     parser.add_argument('--transformer', type=str, required=False,
                         help='Transformer type')
-    parser.add_argument('--transformer_args', type=json.loads, default={},
+    parser.add_argument('--transformer-args', type=json.loads, default={},
                         required=False,
                         help='Transformer args.')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
@@ -68,7 +68,7 @@ def define_args():
                         help='logging training status frequency')
     parser.add_argument('--log-images-interval', type=int, default=200, metavar='N',
                         help='Frequency of logging images and larger plots')
-    parser.add_argument('--loss_reduction', type=str, default='mean',
+    parser.add_argument('--loss-reduction', type=str, default='mean',
                         choices=['mean', 'sum'],
                         help='Sum or average individual pixel losses.')
     parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
@@ -88,21 +88,18 @@ def define_args():
     group.add_argument('--allow-missing-keys', action='store_true', default=False,
                         help='Whether to allow module keys to differ from checkpoint keys'
                              ' when loading a checkpoint')
-    group.add_argument('--continue_training', action='store_true', default=False,
+    group.add_argument('--continue-training', action='store_true', default=False,
                        help='Continue experiment from the last checkpoint in the model dir')
     return parser
 
 
 def train_step(model, optimizer, criterion,  inputs, targets, splits,
-               ignore_index, cuda, loss_reduction):
-    if cuda:
-        inputs, targets = inputs.cuda(), targets.cuda()
+               ignore_index, device, loss_reduction):
+    inputs, targets = inputs.to(device), targets.to(device)
     inputs = torch.split(inputs, splits, dim=0)
     targets = torch.split(targets, splits, dim=0)
     outputs = []
-    step_loss = torch.zeros(1)
-    if cuda:
-        step_loss = step_loss.cuda()
+    step_loss = torch.zeros(1, device=device)
     for input_data, target in zip(inputs, targets):
         input_data, target = Variable(input_data), Variable(target)
         output = model(input_data)
@@ -119,7 +116,7 @@ def train_step(model, optimizer, criterion,  inputs, targets, splits,
 
 def train_epoch(
         model, loader, criterion, optimizer, lr_scheduler,
-        epoch, console_logger, visual_logger, cuda, log_interval,
+        epoch, console_logger, visual_logger, device, log_interval,
         max_gpu_batch_size, loss_reduction):
     model.train()
 
@@ -131,18 +128,22 @@ def train_epoch(
     epoch_metrics = SegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=loader.dataset.ignore_index)
+        ignore_index=loader.dataset.ignore_index
+    )
 
     for step, (ids, data, target) in enumerate(loader):
         start_time = time.time()
         output, loss = train_step(
             model, optimizer, criterion, data, target, max_gpu_batch_size,
-            loader.dataset.ignore_index, cuda, loss_reduction
+            loader.dataset.ignore_index, device, loss_reduction
         )
-        num_targets = torch.sum(target != loader.dataset.ignore_index).float()
-        if cuda:
-            num_targets = num_targets.cuda()
+
+        num_targets = torch.sum(
+            target != loader.dataset.ignore_index
+        ).float().to(device)
+
         loss = loss / num_targets
+
         output = F.softmax(output, dim=1)
         output, target, loss = [
             tensor_to_numpy(t.data) for t in [output, target, loss]
@@ -176,14 +177,12 @@ def train_epoch(
     visual_logger.log_learning_rate(epoch, optimizer.param_groups[0]['lr'])
 
 
-def _get_class_weights(weights_json_str, n_classes, cuda=False):
+def _get_class_weights(weights_json_str, n_classes, device):
     weights_obj = json.loads(weights_json_str)
     weights = np.ones(n_classes, dtype=np.float32)
     for k, v in weights_obj.items():
         weights[int(k)] = v
-    weights = torch.FloatTensor(weights)
-    if cuda:
-        weights = weights.cuda()
+    weights = torch.FloatTensor(weights, device=device)
     return weights
 
 
@@ -230,6 +229,8 @@ def train(args):
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     _set_seed(args.seed, args.cuda)
 
+    device = torch.device('cuda:0' if args.cuda else 'cpu:0')
+
     dataset_cls = import_type(args.dataset, ['pysemseg.datasets'])
     transformer_cls = import_type(args.transformer, ['pysemseg.datasets'])
 
@@ -254,9 +255,9 @@ def train(args):
     )
 
     weights = (
-        _get_class_weights(args.weights, train_dataset.number_of_classes,
-                           args.cuda)
-        if args.weights else None
+        _get_class_weights(
+            args.weights, train_dataset.number_of_classes, device
+        ) if args.weights else None
     )
 
     criterion = torch.nn.CrossEntropyLoss(
@@ -264,9 +265,8 @@ def train(args):
         ignore_index=train_loader.dataset.ignore_index
     )
 
-    if args.cuda:
-        model = model.cuda()
-        criterion = criterion.cuda()
+    model = model.to(device)
+    criterion = criterion.to(device)
 
     optimizer_class = import_type(args.optimizer, ['torch.optim'])
     optimizer = optimizer_class(
@@ -295,11 +295,11 @@ def train(args):
         for epoch in range(start_epoch, start_epoch + args.epochs):
             train_epoch(
                 model, train_loader, criterion, optimizer, lr_scheduler,
-                epoch, logger, visual_logger, args.cuda, args.log_interval,
+                epoch, logger, visual_logger, device, args.log_interval,
                 args.max_gpu_batch_size or args.batch_size, args.loss_reduction)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
-                visual_logger, args.cuda)
+                visual_logger, device)
             if epoch % args.save_model_frequency == 0:
                 save(model, optimizer, lr_scheduler, args.model_dir,
                      train_loader.dataset.in_channels,
