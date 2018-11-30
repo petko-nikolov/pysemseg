@@ -83,8 +83,8 @@ or pass a YAML config
         weight_decay: 0.0005
         momentum: 0.9
     transformer: PascalVOCTransform
-    lr-scheduler: PolyLR
     no-cuda: true
+    lr-scheduler: PolyLR
     lr-scheduler-args:
         max_epochs: 40
         gamma: 0.8
