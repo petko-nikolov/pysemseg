@@ -80,7 +80,6 @@ class ResBlock(nn.Sequential):
 class ResNet(nn.Module):
     def __init__(self, in_channels, layers_config):
         super().__init__()
-        assert len(layers_config) == 4
         expansion = 4
         channels = layers_config[0]['channels']
         self.conv1 = nn.Conv2d(
@@ -89,7 +88,7 @@ class ResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(channels)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layers = nn.Sequential()
+        self.layers = nn.ModuleList()
         for i, layer_config in enumerate(layers_config):
             self.layers.add_module(
                 'layer{}'.format(i + 1),
@@ -122,8 +121,11 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        x = self.layers(x)
-        return x
+        block_outputs = []
+        for layer in self.layers:
+            x = layer(x)
+            block_outputs.append(x)
+        return x, block_outputs
 
 
 def _resnet(layers, pretrained_model=None, in_channels=3, output_stride=16,
@@ -243,11 +245,41 @@ class ASPPModule(nn.Module):
         x = self.final_conv(x)
         return x
 
+
+class Decoder(nn.Module):
+    def __init__(self, low_level_channels, encoder_channels,
+                 low_level_reduced_channels=48):
+        super().__init__()
+        self.reduce_low_level = nn.Conv2d(
+            low_level_channels, low_level_reduced_channels, kernel_size=1)
+        self.fuse = nn.Sequential(
+            nn.Conv2d(
+                encoder_channels + low_level_reduced_channels, 256,
+                kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(256),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x, low_level_features):
+        low_level_features = self.reduce_low_level(low_level_features)
+        x = F.interpolate(
+            x, size=low_level_features.shape[2:], mode='bilinear',
+            align_corners=True
+        )
+        x = torch.cat([x, low_level_features], dim=1)
+        x = self.fuse(x)
+        return x
+
+
 class Deeplab(nn.Module):
     def __init__(
-            self, in_channels, n_classes, backbone_cls, score_channels=256,
-            aspp_rates=[6, 12, 18], pretrained=True, output_stride=16,
-            multi_grid=[1, 2, 4], finetune_bn=True):
+            self, in_channels, n_classes, backbone_cls, decoder=None,
+            score_channels=256, aspp_rates=[6, 12, 18], pretrained=True,
+            output_stride=16, multi_grid=[1, 2, 4], finetune_bn=True,
+            use_encoder=False):
         super().__init__()
         self.backbone = backbone_cls(
             pretrained=pretrained,
@@ -258,6 +290,7 @@ class Deeplab(nn.Module):
         rate = 2 if output_stride == 8 else 1
         self.aspp = ASPPModule(2048, 256, [r * rate for r in aspp_rates])
         self.finetune_bn = finetune_bn
+        self.decoder = decoder
         self.score = nn.Sequential(
             nn.Conv2d(score_channels, score_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(score_channels),
@@ -267,8 +300,10 @@ class Deeplab(nn.Module):
 
     def forward(self, x):
         input_size = x.shape[2:]
-        x = self.backbone(x)
+        x, block_outputs = self.backbone(x)
         x = self.aspp(x)
+        if self.decoder:
+            x = self.decoder(x, block_outputs[0])
         x = F.interpolate(
             x, size=input_size, mode='bilinear', align_corners=True
         )
@@ -293,3 +328,10 @@ def deeplabv3_resnet101(in_channels, n_classes, **kwargs):
 
 def deeplabv3_resnet152(in_channels, n_classes, **kwargs):
     return Deeplab(in_channels, n_classes, _resnet152, **kwargs)
+
+
+def deeplabv3plus_resnet101(in_channels, n_classes, **kwargs):
+    return Deeplab(
+        in_channels, n_classes, _resnet101,
+        decoder=Decoder(256, 256, 48), **kwargs
+    )

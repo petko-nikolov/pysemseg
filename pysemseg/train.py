@@ -314,7 +314,6 @@ def train(args):
 def main():
     parser = define_args()
     args = parser.parse_args()
-    print(args)
     train(args)
 
 
