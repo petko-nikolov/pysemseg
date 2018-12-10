@@ -5,13 +5,14 @@ import glob
 import re
 import numpy as np
 import torch
+import importlib
 
 def save(model, optimizer, lr_scheduler, model_dir,
          in_channels, n_classes, epoch, train_args):
     save_dict = {
         'model': model.state_dict(),
         'model_args': {
-            'in_channels': 3,
+            'in_channels': in_channels,
             'n_classes': n_classes,
             **train_args.model_args,
         },
@@ -71,7 +72,7 @@ def import_type(name, modules=[]):
     for tp in type_paths:
         try:
             components = tp.split('.')
-            mod = __import__(components[0])
+            mod = importlib.import_module(components[0])
             for comp in components[1:]:
                 mod = getattr(mod, comp)
             return mod
@@ -156,15 +157,28 @@ class ColorPalette:
         return label_mask
 
 
-def load_model(checkpoint_path, model_cls, transformer_cls):
+def load_model(
+        checkpoint_path, model_cls, transformer_cls,
+        model_args={}, transformer_args={}, device=None):
     checkpoint = torch.load(
         checkpoint_path,
         map_location=lambda storage, location: storage)
-    model = model_cls(**checkpoint['args'].get('model_args', {}))
+    model = model_cls(**{**checkpoint.get('model_args', {}), **model_args})
+    if device is not None:
+        model = model.to(device)
     transformer = transformer_cls(
-        **checkpoint['args'].get('transformer_args', {}))
-    model.load_state_dict(checkpoint['state'], strict=True)
+        'test',
+        **{**checkpoint.get('transformer_args', {}), **transformer_args}
+    )
+    model.load_state_dict(checkpoint['model'], strict=True)
     model.eval()
     def predict(input_tensor):
-        return  model(transformer(input_tensor))
+        with torch.no_grad():
+            transformed_image = transformer(
+                input_tensor,
+                torch.zeros(input_tensor.shape[1:], dtype=torch.long)
+            )[0].unsqueeze(0)
+            if device is not None:
+                transformed_image = transformed_image.to(device)
+            return model(transformed_image)
     return predict
