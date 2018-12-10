@@ -59,8 +59,8 @@ class CamVid(SegmentationDataset):
         super().__init__()
         assert split in ['train', 'val', 'test']
         self.color_palette_ = ColorPalette(CAMVID_COLORS)
-        self.image_loader = CV2ImageLoader()
-        self.target_laoder = CV2ImageLoader(grayscale=True)
+        self.image_loader = transforms.CV2ImageLoader()
+        self.target_loader = transforms.CV2ImageLoader(grayscale=True)
         self.root_dir = root_dir
         self.split = split
         self.image_data = _parse_image_paths(

@@ -154,7 +154,7 @@ class PascalVOCTransform:
         self.image_augmentations = transforms.Compose([
             transforms.RandomHueSaturation(
                 hue_delta=0.05, saturation_scale_range=(0.7, 1.3)),
-            transforms.RandomContrast(0.5, 1.5),
+            transforms.RandomContrast(0.8, 1.2),
             transforms.RandomBrightness(-32.0 / 255, 32. / 255)
         ])
 
@@ -176,7 +176,6 @@ class PascalVOCTransform:
         ])
 
     def __call__(self, image, target):
-        image = self.image_loader(image)
         if self.mode == 'train':
             image = self.image_augmentations(image)
             image, target = self.joint_augmentations(image, target)
