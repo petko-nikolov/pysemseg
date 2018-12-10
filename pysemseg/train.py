@@ -1,7 +1,8 @@
+import sys
 import os
 import ast
-import json
 import time
+import yaml
 import numpy as np
 import configargparse
 
@@ -36,6 +37,9 @@ def define_args():
                         help='Path to store output data.')
     parser.add_argument('--dataset', type=str, required=True,
                         help=('Path to the dataset class including the module'))
+    parser.add_argument('--dataset-args', type=ast.literal_eval, default={},
+                        required=False,
+                        help='Dataset args.')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--max-gpu-batch-size', type=int, default=None,
@@ -84,11 +88,6 @@ def define_args():
     parser.add_argument('--save-model-frequency', type=int,
                         required=False, default=5,
                         help='Save model checkpoint every nth epoch.')
-    parser.add_argument('--weights', type=ast.literal_eval, required=False,
-                        help=('Class weights passed as a JSON or dict '
-                              'str representationobject, e.g:'
-                              '{"0": 5.0, "2": 3.0}, missing classes get'
-                              'weight one'))
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--allow-missing-keys', action='store_true', default=False,
                         help='Whether to allow module keys to differ from checkpoint keys'
@@ -100,9 +99,11 @@ def define_args():
 
 def train_step(model, optimizer, criterion,  inputs, targets, splits,
                ignore_index, device, loss_reduction):
+    num_targets = torch.sum(targets != ignore_index).float().to(device)
     inputs, targets = inputs.to(device), targets.to(device)
     inputs = torch.split(inputs, splits, dim=0)
     targets = torch.split(targets, splits, dim=0)
+
     outputs = []
     step_loss = torch.zeros(1, device=device)
     for input_data, target in zip(inputs, targets):
@@ -112,7 +113,7 @@ def train_step(model, optimizer, criterion,  inputs, targets, splits,
         loss = criterion(output, target)
         step_loss += loss
         if loss_reduction == 'mean':
-            loss = loss / torch.sum(target != ignore_index).float()
+            loss = loss / num_targets
         loss.backward()
     optimizer.step()
     optimizer.zero_grad()
@@ -182,26 +183,20 @@ def train_epoch(
     visual_logger.log_learning_rate(epoch, optimizer.param_groups[0]['lr'])
 
 
-def _get_class_weights(weights_json_str, n_classes, device):
-    weights = np.ones(n_classes, dtype=np.float32)
-    for k, v in weights_obj.items():
-        weights[int(k)] = v
-    weights = torch.FloatTensor(weights, device=device)
-    return weights
-
-
 def _create_data_loaders(
-        data_dir, dataset_cls, transformer_cls, transformer_args,
+        data_dir, dataset_cls, dataset_args, transformer_cls, transformer_args,
         train_batch_size, val_batch_size, num_workers):
     train_dataset = datasets.create_dataset(
-        data_dir, dataset_cls, transformer_cls, transformer_args, mode='train')
+        data_dir, dataset_cls, dataset_args,
+        transformer_cls, transformer_args, mode='train')
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=train_batch_size,
         shuffle=True, num_workers=num_workers)
 
     validate_dataset = datasets.create_dataset(
-        data_dir, dataset_cls, transformer_cls, transformer_args, mode='val')
+        data_dir, dataset_cls, dataset_args,
+        transformer_cls, transformer_args, mode='val')
 
     validate_loader = torch.utils.data.DataLoader(
         validate_dataset, batch_size=val_batch_size,
@@ -211,8 +206,11 @@ def _create_data_loaders(
 
 
 def _store_args(args, model_dir):
-    with open(os.path.join(model_dir, 'args.json'), 'w') as args_file:
-        json.dump(args.__dict__, args_file)
+    with open(os.path.join(model_dir, 'args.yaml'), 'w') as args_file:
+        yaml.dump(
+            {**args.__dict__, 'command': " ".join(sys.argv)},
+            args_file
+        )
 
 
 def _set_seed(seed, cuda):
@@ -239,8 +237,9 @@ def train(args):
     transformer_cls = import_type(args.transformer, ['pysemseg.datasets'])
 
     train_loader, validate_loader = _create_data_loaders(
-        args.data_dir, dataset_cls, transformer_cls,  args.transformer_args,
-        args.batch_size,  args.test_batch_size, args.num_workers
+        args.data_dir, dataset_cls, args.dataset_args, transformer_cls,
+        args.transformer_args, args.batch_size,
+        args.test_batch_size, args.num_workers
     )
 
     visual_logger = VisdomLogger(
@@ -258,15 +257,8 @@ def train(args):
         **args.model_args
     )
 
-    weights = (
-        _get_class_weights(
-            args.weights, train_dataset.number_of_classes, device
-        ) if args.weights else None
-    )
-
     criterion = torch.nn.CrossEntropyLoss(
-        weight=weights, reduction='sum',
-        ignore_index=train_loader.dataset.ignore_index
+        reduction='sum', ignore_index=train_loader.dataset.ignore_index
     )
 
     model = model.to(device)
@@ -312,6 +304,7 @@ def train(args):
 
 
 def main():
+    sys.path.append('./')
     parser = define_args()
     args = parser.parse_args()
     train(args)
