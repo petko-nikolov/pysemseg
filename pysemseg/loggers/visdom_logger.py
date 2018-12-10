@@ -57,17 +57,22 @@ class VisdomLogger:
         self._update_metric_plots(iteration, metrics, prefix)
         self._log_current_class_metrics(metrics, prefix)
 
-    def log_prediction_images(self, iteration, image, ground_truth, prediction, name, prefix):
+    def log_prediction_images(
+            self, iteration, image, ground_truth, prediction, name, prefix):
         title = '{}/{}'.format(prefix, name)
         ground_truth = self.color_palette.encode_color(ground_truth)
         prediction = self.color_palette.encode_color(prediction)
         height = int(IMAGES_WIDTH / image.shape[3] * image.shape[2])
-        image = ResizeBatch((height, IMAGES_WIDTH))(image.transpose([0, 2, 3, 1]))
+        image = ResizeBatch((height, IMAGES_WIDTH))(
+            image.transpose([0, 2, 3, 1]))
         prediction = ResizeBatch(
-            (height, IMAGES_WIDTH), interpolation=cv2.INTER_NEAREST)(prediction)
+            (height, IMAGES_WIDTH), interpolation=cv2.INTER_NEAREST)(
+                prediction)
         ground_truth = ResizeBatch(
-            (height, IMAGES_WIDTH), interpolation=cv2.INTER_NEAREST)(ground_truth)
-        combined_images = np.concatenate([image, ground_truth, prediction], axis=2)
+            (height, IMAGES_WIDTH), interpolation=cv2.INTER_NEAREST)(
+                ground_truth)
+        combined_images = np.concatenate(
+            [image[:, :, :, :3], ground_truth, prediction], axis=2)
         self.visdom.images(
             combined_images.transpose([0, 3, 1, 2]),
             nrow=1,
