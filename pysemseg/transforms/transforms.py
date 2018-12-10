@@ -240,6 +240,21 @@ class RandomCrop:
         return RandomCropFixedSize((crop_height, crop_width))(image, mask)
 
 
+class RandomScale:
+    def __init__(self, scale_height=(0.8, 1.2), scale_width=(0.8, 1.2),
+                 interpolation=cv2.INTER_LANCZOS4):
+        self.scale_height = scale_height
+        self.scale_width = scale_width
+
+    def __call__(self, image, mask):
+        height = int(image.shape[0] * np.random.uniform(*self.scale_height))
+        width = int(image.shape[1] * np.random.uniform(*self.scale_width))
+        return (
+            Resize((height, width))(image),
+            Resize((height, width), cv2.INTER_NEAREST)(mask)
+        )
+
+
 class ScaleTo:
     def __init__(self, size, interpolation=cv2.INTER_LANCZOS4):
         self.height, self.width = size

@@ -31,6 +31,8 @@ class ToFloatImage:
     def __call__(self, image):
         if image.dtype == np.uint8:
             return image / 255.
+        elif image.dtype == np.uint16:
+            return image / np.iinfo(np.uint16).max
         elif image.dtype == np.float:
             return image
         raise ValueError("Unsupported image type")

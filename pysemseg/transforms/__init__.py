@@ -4,4 +4,5 @@ from .transforms import (
     Compose, Resize, Binarize, RandomContrast, RandomBrightness,
     RandomHueSaturation, RandomHorizontalFlip, RandomRotate,
     RandomTranslate, RandomGammaCorrection, ResizeBatch,
-    RandomCrop, PadTo, ScaleTo, RandomCropFixedSize, Concat)
+    RandomCrop, PadTo, ScaleTo, RandomCropFixedSize, Concat,
+    RandomScale)
