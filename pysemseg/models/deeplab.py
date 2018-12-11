@@ -335,3 +335,10 @@ def deeplabv3plus_resnet101(in_channels, n_classes, **kwargs):
         in_channels, n_classes, _resnet101,
         decoder=Decoder(256, 256, 48), **kwargs
     )
+
+
+def deeplabv3plus_resnet50(in_channels, n_classes, **kwargs):
+    return Deeplab(
+        in_channels, n_classes, _resnet50,
+        decoder=Decoder(256, 256, 48), **kwargs
+    )
