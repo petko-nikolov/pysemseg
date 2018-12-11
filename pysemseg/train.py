@@ -257,11 +257,15 @@ def train(args):
         **args.model_args
     )
 
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
+
+    model = model.to(device)
+
     criterion = torch.nn.CrossEntropyLoss(
         reduction='sum', ignore_index=train_loader.dataset.ignore_index
     )
 
-    model = model.to(device)
     criterion = criterion.to(device)
 
     optimizer_class = import_type(args.optimizer, ['torch.optim'])
