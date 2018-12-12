@@ -15,7 +15,7 @@ class VisdomLogger:
         self.log_directory = log_directory
         self.color_palette = color_palette
         self.coninue_logging = continue_logging
-        visdom_env = os.path.basename(log_directory)
+        visdom_env = os.path.basename(log_directory.rstrip('/'))
         self.visdom = visdom.Visdom(
             env=visdom_env,
             log_to_filename=os.path.join(log_directory, 'viz.log')
