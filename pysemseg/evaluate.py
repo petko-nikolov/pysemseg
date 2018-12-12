@@ -30,11 +30,7 @@ def evaluate(
 
             predictions = np.argmax(output, axis=1)
 
-            if criterion.reduction == 'sum':
-                if loader.dataset.ignore_index:
-                    loss = loss / np.sum(target != loader.dataset.ignore_index)
-                else:
-                    loss = loss / np.prod(target.shape)
+            loss = loss / np.sum(target != loader.dataset.ignore_index)
 
             metrics.add(predictions, target, float(loss))
 

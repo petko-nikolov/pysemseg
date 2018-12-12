@@ -40,6 +40,12 @@ def define_args():
     parser.add_argument('--dataset-args', type=ast.literal_eval, default={},
                         required=False,
                         help='Dataset args.')
+    parser.add_argument('--criterion', type=str, required=False,
+                        default='torch.nn.CrossEntropyLoss',
+                        help=('Path to the loss class including the module'))
+    parser.add_argument('--criterion-args', type=ast.literal_eval,
+                        default={'reduction': 'sum'}, required=False,
+                        help='Criterion args.')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--max-gpu-batch-size', type=int, default=None,
@@ -76,9 +82,6 @@ def define_args():
                         help='logging training status frequency')
     parser.add_argument('--log-images-interval', type=int, default=200, metavar='N',
                         help='Frequency of logging images and larger plots')
-    parser.add_argument('--loss-reduction', type=str, default='mean',
-                        choices=['mean', 'sum'],
-                        help='Sum or average individual pixel losses.')
     parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
     parser.add_argument('--num-workers', type=int, default=1,
                         help='Number of CPU data workers')
@@ -97,8 +100,8 @@ def define_args():
     return parser
 
 
-def train_step(model, optimizer, criterion,  inputs, targets, splits,
-               ignore_index, device, loss_reduction):
+def train_step(model, optimizer, criterion, inputs, targets, splits,
+               ignore_index, device):
     num_targets = torch.sum(targets != ignore_index).float().to(device)
     inputs, targets = inputs.to(device), targets.to(device)
     inputs = torch.split(inputs, splits, dim=0)
@@ -111,9 +114,8 @@ def train_step(model, optimizer, criterion,  inputs, targets, splits,
         output = model(input_data)
         outputs.append(output)
         loss = criterion(output, target)
+        loss = loss / num_targets
         step_loss += loss
-        if loss_reduction == 'mean':
-            loss = loss / num_targets
         loss.backward()
     optimizer.step()
     optimizer.zero_grad()
@@ -123,7 +125,7 @@ def train_step(model, optimizer, criterion,  inputs, targets, splits,
 def train_epoch(
         model, loader, criterion, optimizer, lr_scheduler,
         epoch, console_logger, visual_logger, device, log_interval,
-        max_gpu_batch_size, loss_reduction):
+        max_gpu_batch_size):
     model.train()
 
     metrics = SegmentationMetrics(
@@ -141,14 +143,8 @@ def train_epoch(
         start_time = time.time()
         output, loss = train_step(
             model, optimizer, criterion, data, target, max_gpu_batch_size,
-            loader.dataset.ignore_index, device, loss_reduction
+            loader.dataset.ignore_index, device
         )
-
-        num_targets = torch.sum(
-            target != loader.dataset.ignore_index
-        ).float().to(device)
-
-        loss = loss / num_targets
 
         output = F.softmax(output, dim=1)
         output, target, loss = [
@@ -262,8 +258,10 @@ def train(args):
 
     model = model.to(device)
 
-    criterion = torch.nn.CrossEntropyLoss(
-        reduction='sum', ignore_index=train_loader.dataset.ignore_index
+    criterion_cls = import_type(args.criterion, ['pysemseg.losses'])
+    criterion = criterion_cls(
+        ignore_index=train_loader.dataset.ignore_index,
+        **args.criterion_args
     )
 
     criterion = criterion.to(device)
@@ -296,7 +294,7 @@ def train(args):
             train_epoch(
                 model, train_loader, criterion, optimizer, lr_scheduler,
                 epoch, logger, visual_logger, device, args.log_interval,
-                args.max_gpu_batch_size or args.batch_size, args.loss_reduction)
+                args.max_gpu_batch_size or args.batch_size)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
                 visual_logger, device)
