@@ -29,8 +29,13 @@ class Resize:
         self.interpolation = interpolation
 
     def __call__(self, image):
-        return cv2.resize(
+        dims = len(image.shape)
+        image = cv2.resize(
             image, self.size[::-1], interpolation=self.interpolation)
+        if len(image.shape) == dims -1:
+            image = np.expand_dims(image, -1)
+        return image
+
 
 
 class ResizeBatch:
@@ -241,14 +246,14 @@ class RandomCrop:
 
 
 class RandomScale:
-    def __init__(self, scale_height=(0.8, 1.2), scale_width=(0.8, 1.2),
+    def __init__(self, scale_range=(0.8, 1.2),
                  interpolation=cv2.INTER_LANCZOS4):
-        self.scale_height = scale_height
-        self.scale_width = scale_width
+        self.scale_range = scale_range
 
     def __call__(self, image, mask):
-        height = int(image.shape[0] * np.random.uniform(*self.scale_height))
-        width = int(image.shape[1] * np.random.uniform(*self.scale_width))
+        scale = np.random.uniform(*self.scale_range)
+        height = int(image.shape[0] * scale)
+        width = int(image.shape[1] * scale)
         return (
             Resize((height, width))(image),
             Resize((height, width), cv2.INTER_NEAREST)(mask)
