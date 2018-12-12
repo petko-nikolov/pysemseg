@@ -82,8 +82,6 @@ class SegmentationMetrics:
         iou = self._iou(outputs, targets)
         metrics['class'] = {
             self.labels.get(i, i): {
-                # 'recall': recall[i],
-                # 'precision': precision[i],
                 'iou': iou[i],
             }
             for i in range(self.num_classes)}
