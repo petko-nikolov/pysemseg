@@ -10,7 +10,7 @@ def read(*names, **kwargs):
         return fp.read()
 
 
-readme = read('README.md')
+readme = read('README.rst')
 
 VERSION = '0.1.1'
 
@@ -25,7 +25,7 @@ requirements = [
     "numpy>=1.14.0",
     "scikit-image>=0.13.1",
     "visdom>=0.1.8.5"
-    "Cython==0.29.1",
+    "cython==0.29.1",
     "pycocotools==2.0.0",
     "ConfigArgParse==0.13.0"
 ]
