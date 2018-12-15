@@ -87,7 +87,7 @@ class ResBlock(nn.Sequential):
 class ResNet(nn.Module):
     def __init__(self, in_channels, layers_config):
         super().__init__()
-        expansion = 4
+        self.expansion = 4
         channels = layers_config[0]['channels']
         self.conv1 = nn.Conv2d(
             in_channels, channels, kernel_size=7, stride=2, padding=3,
@@ -99,9 +99,9 @@ class ResNet(nn.Module):
         for i, layer_config in enumerate(layers_config):
             self.layers.add_module(
                 'layer{}'.format(i + 1),
-                ResBlock(channels, **layer_config, expansion=expansion)
+                ResBlock(channels, **layer_config, expansion=self.expansion)
             )
-            channels = layer_config['channels'] * expansion
+            channels = layer_config['channels'] * self.expansion
 
         self.reset_parameters()
 
@@ -140,19 +140,19 @@ def resnet(layers, pretrained_model=None, in_channels=3, output_stride=16,
 
     assert output_stride in [8, 16, 32]
     if output_stride == 8:
-        rate3 = 2 * layers[2]
+        rate3 = [2] * layers[2]
         stride3 = 1
         rate4 = [rate3 * 2 * mg for mg in multi_grid]
         stride4 = 1
     elif output_stride == 16:
-        rate3 = 1 * layers[2]
+        rate3 = [1] * layers[2]
         stride3 = 2
         rate4 = [rate3 * 2 * mg for mg in multi_grid]
         stride4 = 1
     elif output_stride == 32:
-        rate3 = 1 * layers[2]
+        rate3 = [1] * layers[2]
         stride3 = 2
-        rate4 = 1 * layers[3]
+        rate4 = [1] * layers[3]
         stride4 = 2
 
     blocks = [
