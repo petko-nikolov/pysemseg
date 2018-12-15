@@ -34,6 +34,7 @@ class Resize:
             image, self.size[::-1], interpolation=self.interpolation)
         if len(image.shape) == dims -1:
             image = np.expand_dims(image, -1)
+        image = np.clip(image, 0, 1)
         return image
 
 
@@ -137,6 +138,7 @@ class RandomHueSaturation:
         h = self._adjust_hue(h, hue)
         hsvimage = cv2.merge([h, s, v])
         image = cv2.cvtColor(hsvimage, cv2.COLOR_HSV2RGB)
+        image = np.clip(image, 0.0, 1.0)
         return image
 
 
@@ -180,7 +182,7 @@ class RandomRotate:
 
     def __call__(self, image, mask):
         angle = np.random.uniform(-self.max_delta, self.max_delta)
-        image = self._rotate(image, angle)
+        image = self._rotate(image, angle, interpolation=cv2.INTER_LINEAR)
         mask = self._rotate(mask, angle, interpolation=cv2.INTER_NEAREST)
         return image, mask
 
@@ -246,14 +248,18 @@ class RandomCrop:
 
 
 class RandomScale:
-    def __init__(self, scale_range=(0.8, 1.2),
-                 interpolation=cv2.INTER_LANCZOS4):
-        self.scale_range = scale_range
+    def __init__(self, scale_height=(0.8, 1.2), scale_width=(0.8, 1.2), aspect_range=[0.8, 1.2]):
+        self.scale_height = scale_height
+        self.scale_width = scale_width
+        self.aspect_range = aspect_range
 
     def __call__(self, image, mask):
-        scale = np.random.uniform(*self.scale_range)
-        height = int(image.shape[0] * scale)
-        width = int(image.shape[1] * scale)
+        hs = np.random.uniform(*self.scale_height)
+        height = int(image.shape[0] * hs)
+        lw = max(hs * self.aspect_range[0], self.scale_width[0])
+        hw = min(hs * self.aspect_range[1], self.scale_width[1])
+        ws = np.random.uniform(lw, hw)
+        width = int(image.shape[1] * ws)
         return (
             Resize((height, width))(image),
             Resize((height, width), cv2.INTER_NEAREST)(mask)
