@@ -22,7 +22,7 @@ class DownLayer(nn.Module):
         self.conv2 = nn.Conv2d(out_units, out_units, kernel_size=3, padding=1)
         if batch_norm:
             self.bn2 = nn.BatchNorm2d(out_units)
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.0)
 
     def forward(self, x):
         x = F.relu(self.conv1(x), inplace=True)
@@ -47,7 +47,7 @@ class UpLayer(nn.Module):
         if batch_norm:
             self.bn2 = nn.BatchNorm2d(out_units)
         self.upsample = upsample
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.0)
         if self.upsample:
             self.conv3 = nn.ConvTranspose2d(
                 out_units, out_units // 2, kernel_size=2, stride=2,
@@ -121,27 +121,12 @@ class UNetResNetV1(nn.Module):
         self.bottleneck_channels = interface_channels // self.network.expansion
         self.interface = UpLayer(interface_channels, self.bottleneck_channels)
         self.up_layers = nn.ModuleList([
-            UpLayer(skip_channels[-1] + self.bottleneck_channels, up_channels[0]),
-            UpLayer(skip_channels[-2] + up_channels[0], up_channels[1]),
-            UpLayer(skip_channels[-3] + up_channels[1], up_channels[2]),
-            UpLayer(skip_channels[-4] + up_channels[2], up_channels[3])
+            UpLayer(skip_channels[-1] + self.bottleneck_channels // 2, up_channels[0]),
+            UpLayer(skip_channels[-2] + up_channels[0] // 2, up_channels[1]),
+            UpLayer(skip_channels[-3] + up_channels[1] // 2, up_channels[2]),
+            UpLayer(skip_channels[-4] + up_channels[2] // 2, up_channels[3])
         ])
-        self.downsample = nn.ModuleList([
-            nn.Conv2d(
-                self.network.expansion * skip_channels[0], skip_channels[0], 1
-            ),
-            nn.Conv2d(
-                self.network.expansion * skip_channels[1], skip_channels[1], 1
-            ),
-            nn.Conv2d(
-                self.network.expansion * skip_channels[2], skip_channels[2], 1
-            ),
-            nn.Conv2d(
-                self.network.expansion * skip_channels[3], skip_channels[3], 1
-            ),
-        ])
-
-        self.conv_classes = nn.Conv2d(64, n_classes, kernel_size=1)
+        self.conv_classes = nn.Conv2d(up_channels[3] // 2, n_classes, kernel_size=1)
 
     def _resnet_forward(self, x):
         skips = []
@@ -164,21 +149,32 @@ class UNetResNetV1(nn.Module):
         input_tensor = x
         x, skips = self._resnet_forward(x)
         x = self.interface(x)
-        for i in range(1, len(self.up_layers)):
-            skip = self.downsample[-(i + 1)](skips[-(i + 1)])
+        for i in range(0, len(self.up_layers)):
+            skip = _maybe_pad(skips[-i - 1], x.shape[2:])
             x = torch.cat([x, skip], dim=1)
-            x = _maybe_pad(x, skip.shape[2:])
-            x = self.up_layer[i](x)
-        x = torch.cat([x, input_tensor], dim=1)
+            x = self.up_layers[i](x)
         x = _maybe_pad(x, input_tensor.shape[2:])
+        x = F.interpolate(
+            x, size=input_tensor.shape[2:], mode='bilinear', align_corners=True)
         scores = self.conv_classes(x)
-        return x
+        return scores
 
-def unet_resnet101(in_channels, n_classes):
-    net = resnet101(in_channels=in_channels, output_stride=32)
+
+def unet_resnet(resnet_model_fn, in_channels, n_classes, pretrained=True, **kwargs):
+    net = resnet_model_fn(
+        in_channels=in_channels, output_stride=32, pretrained=pretrained,
+        **kwargs)
     return UNetResNetV1(
         n_classes=n_classes, network=net,
-        skip_channels=[64, 64, 128, 256],
+        skip_channels=[64, 64, 512, 1024],
         interface_channels=2048,
-        up_channels=[512, 256, 128, 64]
+        up_channels=[1024, 512, 256, 128]
         )
+
+
+def unet_resnet101(*args, **kwargs):
+    return unet_resnet(resnet101, *args, **kwargs)
+
+
+def unet_resnet152(*args, **kwargs):
+    return unet_resnet(resnet152, *args, **kwargs)

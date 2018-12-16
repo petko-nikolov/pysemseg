@@ -42,6 +42,10 @@ def restore(checkpoint_path, model, optimizer=None, lr_scheduler=None,
     checkpoint = torch.load(
         checkpoint_path,
         map_location=lambda storage, location: storage if restore_cpu else None)
+    checkpoint['model'] = {
+        re.sub('^module[.]', '', key): value
+        for key, value in checkpoint['model'].items()
+    }
     model.load_state_dict(checkpoint['model'], strict=strict)
     if optimizer is not None and continue_training:
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -172,6 +176,10 @@ def load_model(
         'test',
         **{**checkpoint.get('transformer_args', {}), **transformer_args}
     )
+    checkpoint['model'] = {
+        re.sub('^module[.]', '', key): value
+        for key, value in checkpoint['model'].items()
+    }
     model.load_state_dict(checkpoint['model'], strict=True)
     model.eval()
     def predict(input_tensor):
