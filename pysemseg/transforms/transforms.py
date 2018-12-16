@@ -34,7 +34,6 @@ class Resize:
             image, self.size[::-1], interpolation=self.interpolation)
         if len(image.shape) == dims -1:
             image = np.expand_dims(image, -1)
-        image = np.clip(image, 0, 1)
         return image
 
 
