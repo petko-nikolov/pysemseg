@@ -1,16 +1,16 @@
 import numpy as np
 from torch.autograd import Variable
 import torch
-from pysemseg.metrics import SegmentationMetrics
+from pysemseg.metrics import TorchSegmentationMetrics
 from pysemseg.utils import tensor_to_numpy, flatten_dict
 
 
 def evaluate(
         model, loader, criterion, console_logger, epoch,
-        visual_logger, device):
+        visual_logger, device, log_images_interval):
     model.eval()
 
-    metrics = SegmentationMetrics(
+    metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
         ignore_index=loader.dataset.ignore_index
@@ -24,22 +24,18 @@ def evaluate(
             output = model(data)
             loss = criterion(output, target)
 
-            output, target, loss = [
-                tensor_to_numpy(t.data) for t in [output, target, loss]
-            ]
+            predictions = torch.argmax(output, dim=1)
 
-            predictions = np.argmax(output, axis=1)
+            loss = loss / torch.sum(target != loader.dataset.ignore_index).float()
 
-            loss = loss / np.sum(target != loader.dataset.ignore_index)
+            metrics.add(predictions, target, loss)
 
-            metrics.add(predictions, target, float(loss))
-
-            if step % 10 == 0:
+            if step % log_images_interval == 0:
                 visual_logger.log_prediction_images(
                     step,
                     tensor_to_numpy(data.data),
-                    target.data,
-                    predictions,
+                    tensor_to_numpy(target.data),
+                    tensor_to_numpy(predictions),
                     name='images',
                     prefix='Validation'
                 )

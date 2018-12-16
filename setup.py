@@ -15,7 +15,7 @@ readme = read('README.rst')
 VERSION = '0.1.1'
 
 requirements = [
-    "torch==0.4.1",
+    "torch==1.0.0",
     "torchvision==0.2.1",
     "tqdm>=4.19.5",
     "tensorboardX>=1.1",

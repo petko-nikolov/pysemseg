@@ -1,3 +1,4 @@
+import cProfile
 import sys
 import os
 import ast
@@ -11,7 +12,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from pysemseg import datasets
-from pysemseg.metrics import SegmentationMetrics
+from pysemseg.metrics import TorchSegmentationMetrics
 from pysemseg.loggers import TensorboardLogger, VisdomLogger, ConsoleLogger
 from pysemseg.evaluate import evaluate
 from pysemseg.utils import (
@@ -78,7 +79,7 @@ def define_args():
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=8861, metavar='S',
                         help='random seed (default: 8861)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+    parser.add_argument('--log-interval', type=int, default=20, metavar='N',
                         help='logging training status frequency')
     parser.add_argument('--log-images-interval', type=int, default=200, metavar='N',
                         help='Frequency of logging images and larger plots')
@@ -103,7 +104,6 @@ def define_args():
 def train_step(model, optimizer, criterion, inputs, targets, splits,
                ignore_index, device):
     num_targets = torch.sum(targets != ignore_index).float().to(device)
-    inputs, targets = inputs.to(device), targets.to(device)
     inputs = torch.split(inputs, splits, dim=0)
     targets = torch.split(targets, splits, dim=0)
 
@@ -115,7 +115,7 @@ def train_step(model, optimizer, criterion, inputs, targets, splits,
         outputs.append(output)
         loss = criterion(output, target)
         loss = loss / num_targets
-        step_loss += loss
+        step_loss += loss.detach()
         loss.backward()
     optimizer.step()
     optimizer.zero_grad()
@@ -125,15 +125,15 @@ def train_step(model, optimizer, criterion, inputs, targets, splits,
 def train_epoch(
         model, loader, criterion, optimizer, lr_scheduler,
         epoch, console_logger, visual_logger, device, log_interval,
-        max_gpu_batch_size):
+        log_images_interval, max_gpu_batch_size):
     model.train()
 
-    metrics = SegmentationMetrics(
+    metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
         ignore_index=loader.dataset.ignore_index
     )
-    epoch_metrics = SegmentationMetrics(
+    epoch_metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
         ignore_index=loader.dataset.ignore_index
@@ -141,36 +141,36 @@ def train_epoch(
 
     for step, (ids, data, target) in enumerate(loader):
         start_time = time.time()
+        data , target = data.to(device), target.to(device)
         output, loss = train_step(
             model, optimizer, criterion, data, target, max_gpu_batch_size,
             loader.dataset.ignore_index, device
         )
 
         output = F.softmax(output, dim=1)
-        output, target, loss = [
-            tensor_to_numpy(t.data) for t in [output, target, loss]
-        ]
-        predictions = np.argmax(output, axis=1)
-        metrics.add(predictions, target, float(loss))
-        epoch_metrics.add(predictions, target, float(loss))
+        predictions = torch.argmax(output, dim=1)
+        metrics.add(predictions, target, loss)
+        epoch_metrics.add(predictions, target, loss)
 
+        step_time = time.time() - start_time
         if step % log_interval == 0:
             metrics_dict = metrics.metrics()
-            metrics_dict['time'] = time.time() - start_time
+            metrics_dict['time'] = step_time
             metrics_dict.pop('class')
-            console_logger.log(step, epoch, loader, data, metrics_dict)
+            console_logger.log(step, epoch, loader, tensor_to_numpy(data), metrics_dict)
 
-            metrics = SegmentationMetrics(
+            metrics = TorchSegmentationMetrics(
                 loader.dataset.number_of_classes,
                 loader.dataset.labels,
                 ignore_index=loader.dataset.ignore_index
             )
 
+        if step % log_images_interval == 0:
             visual_logger.log_prediction_images(
                 step,
                 tensor_to_numpy(data.data),
-                target,
-                predictions,
+                tensor_to_numpy(target.data),
+                tensor_to_numpy(predictions.data),
                 name='images',
                 prefix='Train'
             )
@@ -294,10 +294,11 @@ def train(args):
             train_epoch(
                 model, train_loader, criterion, optimizer, lr_scheduler,
                 epoch, logger, visual_logger, device, args.log_interval,
+                args.log_images_interval,
                 args.max_gpu_batch_size or args.batch_size)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
-                visual_logger, device)
+                visual_logger, device, args.log_images_interval)
             if epoch % args.save_model_frequency == 0:
                 save(model, optimizer, lr_scheduler, args.model_dir,
                      train_loader.dataset.in_channels,

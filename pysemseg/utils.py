@@ -64,6 +64,8 @@ def get_latest_checkpoint(model_dir):
 def tensor_to_numpy(tensor):
     if tensor.is_cuda:
         tensor = tensor.cpu()
+    if isinstance(tensor, torch.autograd.Variable):
+        tensor = tensor.data
     return tensor.numpy()
 
 
