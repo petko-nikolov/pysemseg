@@ -25,10 +25,10 @@ class DownLayer(nn.Module):
         self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv1(x), inplace=True)
         if self.batch_norm:
             x = self.bn1(x)
-        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv2(x), inplace=True)
         if self.batch_norm:
             x = self.bn2(x)
         if self.training:
@@ -57,16 +57,16 @@ class UpLayer(nn.Module):
 
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv1(x), inplace=True)
         if self.batch_norm:
             x = self.bn1(x)
-        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv2(x), inplace=True)
         if self.batch_norm:
             x = self.bn2(x)
         if self.training:
             x = self.dropout(x)
         if self.upsample:
-            x = F.relu(self.conv3(x))
+            x = F.relu(self.conv3(x), inplace=True)
             if self.batch_norm:
                 x = self.bn3(x)
         return x
@@ -101,9 +101,9 @@ class UNet(nn.Module):
             x = layer(x)
             down_outputs.append(x)
             x = F.max_pool2d(x, kernel_size=2)
-        x = F.relu(self.interface1(x))
-        x = F.relu(self.interface2(x))
-        x = F.relu(self.interface_up(x))
+        x = F.relu(self.interface1(x), inplace=True)
+        x = F.relu(self.interface2(x), inplace=True)
+        x = F.relu(self.interface_up(x), inplace=True)
         for i, layer in enumerate(self.up_layers):
             x = _maybe_pad(x, down_outputs[-(i + 1)].shape[2:])
             x = torch.cat([x, down_outputs[-(i + 1)]], dim=1)
