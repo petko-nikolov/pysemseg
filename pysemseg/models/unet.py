@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from pysemseg.models.resnet import resnet50, resnet101
+from pysemseg.models.resnet import resnet50, resnet101, ResBlock
 
 
 def _maybe_pad(x, size):
@@ -33,6 +33,30 @@ class DownLayer(nn.Module):
             x = self.bn2(x)
         if self.training:
             x = self.dropout(x)
+        return x
+
+
+class UpResBlock(nn.Module):
+    def __init__(self, in_units, out_units, upsample=True, batch_norm=True):
+        super().__init__()
+        self.upsample = upsample
+        self.batch_norm = batch_norm
+        self.block = ResBlock(
+            in_units, out_units, 3, dilations=[1, 2, 1], expansion=1)
+        if self.upsample:
+            self.conv3 = nn.ConvTranspose2d(
+                out_units, out_units // 2, kernel_size=2, stride=2,
+                padding=0, output_padding=0)
+            if self.batch_norm:
+                self.bn3 = nn.BatchNorm2d(out_units // 2)
+
+
+    def forward(self, x):
+        x = self.block(x)
+        if self.upsample:
+            x = F.relu(self.conv3(x), inplace=True)
+            if self.batch_norm:
+                x = self.bn3(x)
         return x
 
 
@@ -121,10 +145,10 @@ class UNetResNetV1(nn.Module):
         self.bottleneck_channels = interface_channels // self.network.expansion
         self.interface = UpLayer(interface_channels, self.bottleneck_channels)
         self.up_layers = nn.ModuleList([
-            UpLayer(skip_channels[-1] + self.bottleneck_channels // 2, up_channels[0]),
-            UpLayer(skip_channels[-2] + up_channels[0] // 2, up_channels[1]),
-            UpLayer(skip_channels[-3] + up_channels[1] // 2, up_channels[2]),
-            UpLayer(skip_channels[-4] + up_channels[2] // 2, up_channels[3])
+            UpResBlock(skip_channels[-1] + self.bottleneck_channels // 2, up_channels[0]),
+            UpResBlock(skip_channels[-2] + up_channels[0] // 2, up_channels[1]),
+            UpResBlock(skip_channels[-3] + up_channels[1] // 2, up_channels[2]),
+            UpResBlock(skip_channels[-4] + up_channels[2] // 2, up_channels[3])
         ])
         self.conv_classes = nn.Conv2d(up_channels[3] // 2, n_classes, kernel_size=1)
 
