@@ -46,6 +46,14 @@ def restore(checkpoint_path, model, optimizer=None, lr_scheduler=None,
         re.sub('^module[.]', '', key): value
         for key, value in checkpoint['model'].items()
     }
+    if not strict:
+        msd = model.state_dict()
+        checkpoint['model'] = {
+            k: v for k, v in checkpoint['model'].items()
+            if k in msd and msd[k].shape == v.shape
+        }
+        print("Loading {} parameters".format(len(checkpoint['model'])))
+
     model.load_state_dict(checkpoint['model'], strict=strict)
     if optimizer is not None and continue_training:
         optimizer.load_state_dict(checkpoint['optimizer'])
