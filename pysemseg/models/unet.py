@@ -1,14 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from pysemseg.models.resnet import resnet50, resnet101, ResBlock
+from pysemseg.models.resnet import resnet50, resnet101, resnet152, ResBlock
 
 
 def _maybe_pad(x, size):
-    hpad = size[0] - x.shape[2]
-    wpad = size[1] - x.shape[3]
+    hpad = max(size[0] - x.shape[2], 0)
+    wpad = max(size[1] - x.shape[3], 0)
     if hpad + wpad > 0:
-        x = F.pad(x, (0, wpad, 0, hpad, 0, 0, 0, 0 ))
+        lhpad = hpad // 2
+        rhpad = hpad // 2 + hpad % 2
+        lwpad = wpad // 2
+        rwpad = wpad // 2 + wpad % 2
+        x = F.pad(x, (lwpad, rwpad, lhpad, rhpad, 0, 0, 0, 0 ))
     return x
 
 
@@ -120,6 +124,7 @@ class UNet(nn.Module):
         self.conv_classes = nn.Conv2d(64, n_classes, kernel_size=1)
 
     def forward(self, x):
+        input_height, input_width = x.shape[2:]
         down_outputs = []
         for layer in self.down_layers:
             x = layer(x)
@@ -129,9 +134,13 @@ class UNet(nn.Module):
         x = F.relu(self.interface2(x), inplace=True)
         x = F.relu(self.interface_up(x), inplace=True)
         for i, layer in enumerate(self.up_layers):
-            x = _maybe_pad(x, down_outputs[-(i + 1)].shape[2:])
-            x = torch.cat([x, down_outputs[-(i + 1)]], dim=1)
+            skip = down_outputs[-(i+1)]
+            x = _maybe_pad(x, skip.shape[2:])
+            skip = _maybe_pad(skip, x.shape[2:])
+            x = torch.cat([x, skip], dim=1)
             x = layer(x)
+        x = F.interpolate(
+            x, (input_height, input_width), mode='bilinear', align_corners=True)
         x = self.conv_classes(x)
         return x
 
@@ -160,7 +169,6 @@ class UNetResNetV1(nn.Module):
         x = self.network.relu(x)
         x = self.network.maxpool(x)
         skips.append(x)
-        block_outputs = []
         for i, layer in enumerate(self.network.layers):
             height, width = x.shape[2:]
             x = layer(x)
