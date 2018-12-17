@@ -101,51 +101,37 @@ def define_args():
     return parser
 
 
-def train_step(model, optimizer, criterion, inputs, targets, splits,
-               ignore_index, device):
-    num_targets = torch.sum(targets != ignore_index).float().to(device)
-    inputs = torch.split(inputs, splits, dim=0)
-    targets = torch.split(targets, splits, dim=0)
-
-    outputs = []
-    step_loss = torch.zeros(1, device=device)
-    for input_data, target in zip(inputs, targets):
-        input_data, target = Variable(input_data), Variable(target)
-        output = model(input_data)
-        outputs.append(output)
-        loss = criterion(output, target)
-        loss = loss / num_targets
-        step_loss += loss.detach()
-        loss.backward()
-    optimizer.step()
-    optimizer.zero_grad()
-    return torch.cat(outputs, dim=0), step_loss
-
-
 def train_epoch(
         model, loader, criterion, optimizer, lr_scheduler,
         epoch, console_logger, visual_logger, device, log_interval,
-        log_images_interval, max_gpu_batch_size):
+        log_images_interval, accumulate_steps):
     model.train()
+
+    ignore_index = loader.dataset.ignore_index
 
     metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=loader.dataset.ignore_index
+        ignore_index=ignore_index
     )
     epoch_metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=loader.dataset.ignore_index
+        ignore_index=ignore_index
     )
 
     for step, (ids, data, target) in enumerate(loader):
         start_time = time.time()
-        data , target = data.to(device), target.to(device)
-        output, loss = train_step(
-            model, optimizer, criterion, data, target, max_gpu_batch_size,
-            loader.dataset.ignore_index, device
-        )
+        data , target = Variable(data.to(device)), Variable(target.to(device))
+        output = model(data)
+        loss = criterion(output, target)
+        num_targets = torch.sum(target != ignore_index).float().to(device)
+        loss = loss / num_targets
+        loss.backward()
+
+        if step % accumulate_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
 
         output = F.softmax(output, dim=1)
         predictions = torch.argmax(output, dim=1)
@@ -153,7 +139,7 @@ def train_epoch(
         epoch_metrics.add(predictions, target, loss)
 
         step_time = time.time() - start_time
-        if step % log_interval == 0:
+        if step % (accumulate_steps * log_interval) == 0:
             metrics_dict = metrics.metrics()
             metrics_dict['time'] = step_time
             metrics_dict.pop('class')
@@ -162,10 +148,10 @@ def train_epoch(
             metrics = TorchSegmentationMetrics(
                 loader.dataset.number_of_classes,
                 loader.dataset.labels,
-                ignore_index=loader.dataset.ignore_index
+                ignore_index=ignore_index
             )
 
-        if step % log_images_interval == 0:
+        if step % (accumulate_steps * log_images_interval) == 0:
             visual_logger.log_prediction_images(
                 step,
                 tensor_to_numpy(data.data),
@@ -232,9 +218,11 @@ def train(args):
     dataset_cls = import_type(args.dataset, ['pysemseg.datasets'])
     transformer_cls = import_type(args.transformer, ['pysemseg.datasets'])
 
+    args.max_gpu_batch_size = args.max_gpu_batch_size or args.batch_size
+
     train_loader, validate_loader = _create_data_loaders(
         args.data_dir, dataset_cls, args.dataset_args, transformer_cls,
-        args.transformer_args, args.batch_size,
+        args.transformer_args, args.max_gpu_batch_size,
         args.test_batch_size, args.num_workers
     )
 
@@ -295,7 +283,7 @@ def train(args):
                 model, train_loader, criterion, optimizer, lr_scheduler,
                 epoch, logger, visual_logger, device, args.log_interval,
                 args.log_images_interval,
-                args.max_gpu_batch_size or args.batch_size)
+                args.batch_size // args.max_gpu_batch_size)
             evaluate(
                 model, validate_loader, criterion, logger, epoch,
                 visual_logger, device, args.log_images_interval)
