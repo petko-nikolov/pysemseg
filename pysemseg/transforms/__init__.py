@@ -5,4 +5,6 @@ from .transforms import (
     RandomHueSaturation, RandomHorizontalFlip, RandomRotate,
     RandomTranslate, RandomGammaCorrection, ResizeBatch,
     RandomCrop, PadTo, ScaleTo, RandomCropFixedSize, Concat,
-    RandomScale)
+    RandomScale, Choice, RandomPerspective, RandomShear,
+    RandomElasticTransform, RandomGaussianBlur
+)

@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+from scipy.ndimage.filters import gaussian_filter
+
 
 
 class Compose:
@@ -156,7 +158,9 @@ class RandomGammaCorrection:
             for i in np.arange(0, 256)]).astype("uint8")
 
         image = cv2.LUT(image, table)
-        return image / 255.
+        image = image / 255.
+        image = np.clip(image, 0.0, 1.0)
+        return image
 
 class RandomHorizontalFlip:
     """
@@ -308,4 +312,125 @@ class PadTo:
             image, top_pad, bottom_pad, left_pad,
             right_pad, cv2.BORDER_CONSTANT, value=self.pad_value
         )
+        return image
+
+
+class Choice:
+    def __init__(self, choices, p=None):
+        self.choices = choices
+        self.p = p
+        if not self.p:
+            self.p = np.ones(len(self.choices)) / len(self.choices)
+
+    def __call__(self, *args):
+        c = np.random.choice(self.choices, p=self.p)
+        return c(*args)
+
+
+class RandomPerspective:
+    def __init__(self, corner_offset=0.15):
+        self.corner_offset = corner_offset
+
+    def __call__(self, image, mask):
+        height, width = image.shape[:2]
+        lh = int(self.corner_offset * height)
+        hh = int(height - self.corner_offset * height)
+        lw = int(self.corner_offset * width)
+        hw = int(width - self.corner_offset * width)
+        x1, x3 = np.random.randint(0, lw, [2])
+        y1, y2 = np.random.randint(0, lh, [2])
+        x2, x4 = np.random.randint(hw, width, [2])
+        y3, y4 = np.random.randint(hh, height, [2])
+        mapped = np.float32([
+             [x1, y1],
+             [x2, y2],
+             [x3, y3],
+             [x4, y4]
+        ])
+        corners = np.float32([
+            [0, 0],
+            [width, 0],
+            [0, height],
+            [width, height]
+        ])
+        M = cv2.getPerspectiveTransform(mapped, corners)
+        image = cv2.warpPerspective(
+            image, M, (width, height), borderMode=cv2.BORDER_REFLECT)
+        mask = cv2.warpPerspective(
+            mask, M, (width, height), flags=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_REFLECT)
+
+        return image, mask
+
+class RandomShear:
+    def __init__(self, max_range=0.01):
+        self.max_range = max_range
+
+    def __call__(self, image, mask):
+        height, width = image.shape[:2]
+        cx = width / 2
+        cy = height / 2
+        pts = np.float32([
+            [cx, cy],
+            [cx + 0.1 * width, cy],
+            [cx, cy + 0.1 * height]
+        ])
+        ru = lambda x: x * np.random.uniform(
+            -self.max_range, self.max_range)
+
+        mapped = np.float32([
+            [pts[0][0] + ru(width), pts[0][1]],
+            [pts[1][0] + ru(width), pts[1][1] + ru(height)],
+            [pts[2][0], pts[2][1] + ru(height)]
+        ])
+
+        M = cv2.getAffineTransform(pts, mapped)
+
+        image = cv2.warpAffine(
+            image, M, (width, height), borderMode=cv2.BORDER_REFLECT)
+        mask = cv2.warpAffine(
+            mask, M, (width, height), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_REFLECT)
+
+        return image, mask
+
+
+class RandomElasticTransform:
+    """
+    Adapted from
+    https://www.kaggle.com/bguberfain/elastic-transform-for-data-augmentation
+
+    """
+    def __init__(self, sigma=(0.07, 0.15), alpha=(3, 3.5)):
+        self.sigma = sigma
+        self.alpha = alpha
+
+    def __call__(self, image, mask):
+        height, width = image.shape[:2]
+        sigma = np.random.uniform(*self.sigma)
+        x_sigma, y_sigma = sigma * width, sigma * height
+        alpha = np.random.uniform(*self.alpha)
+        x_alpha, y_alpha = alpha * width, alpha * height
+        x_, y_ = np.meshgrid(np.arange(0, width), np.arange(0, height), indexing='xy')
+        dx = gaussian_filter((np.random.rand(height, width) * 2 - 1), x_sigma) * x_alpha
+        dy = gaussian_filter((np.random.rand(height, width) * 2 - 1), y_sigma) * y_alpha
+        x = (x_ + dx).astype(np.float32)
+        y = (y_ + dy).astype(np.float32)
+        image = cv2.remap(
+            image, x, y, interpolation=cv2.INTER_AREA,
+            borderMode=cv2.BORDER_REFLECT)
+        mask = cv2.remap(
+            mask, x, y, interpolation=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_REFLECT)
+        return image, mask
+
+
+class RandomGaussianBlur:
+    def __init__(self, kernel_sizes=(3, 5, 7), apply_prob=0.2):
+        self.kernel_sizes = kernel_sizes
+        self.apply_prob = apply_prob
+
+    def __call__(self, image):
+        if np.random.rand() < self.apply_prob:
+            ksize = np.random.choice(self.kernel_sizes)
+            image = cv2.GaussianBlur(image, (ksize,) * 2, 0)
         return image
