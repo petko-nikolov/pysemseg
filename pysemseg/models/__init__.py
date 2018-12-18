@@ -1,4 +1,4 @@
-from .unet import UNet, unet_resnet101
+from .unet import UNet, unet_resnet101, unet_resnet152, unet_big_resnet101
 from .fcn import VGGFCN32, VGGFCN16, VGGFCN8
 from .densenet import fcdensenet56, fcdensenet67, fcdensenet103
 from .deeplab import (

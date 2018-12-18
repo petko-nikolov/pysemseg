@@ -120,8 +120,8 @@ def train_epoch(
         ignore_index=ignore_index
     )
 
+    start_time = time.time()
     for step, (ids, data, target) in enumerate(loader):
-        start_time = time.time()
         data , target = Variable(data.to(device)), Variable(target.to(device))
         output = model(data)
         loss = criterion(output, target)
@@ -133,15 +133,22 @@ def train_epoch(
             optimizer.step()
             optimizer.zero_grad()
 
-        output = F.softmax(output, dim=1)
+        output = F.softmax(output.detach(), dim=1)
         predictions = torch.argmax(output, dim=1)
+
+        predictions, target, loss = (
+            predictions.detach(), target.detach(), loss.detach()
+        )
+
         metrics.add(predictions, target, loss)
         epoch_metrics.add(predictions, target, loss)
 
-        step_time = time.time() - start_time
-        if step % (accumulate_steps * log_interval) == 0:
+        if step % (accumulate_steps * log_interval) == 0 and step > 0:
+            avg_time = (
+                time.time() - start_time) / (accumulate_steps * log_interval)
+            start_time = time.time()
             metrics_dict = metrics.metrics()
-            metrics_dict['time'] = step_time
+            metrics_dict['time'] = avg_time
             metrics_dict.pop('class')
             console_logger.log(step, epoch, loader, tensor_to_numpy(data), metrics_dict)
 

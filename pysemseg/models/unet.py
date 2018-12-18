@@ -12,6 +12,7 @@ def _maybe_pad(x, size):
         rhpad = hpad // 2 + hpad % 2
         lwpad = wpad // 2
         rwpad = wpad // 2 + wpad % 2
+
         x = F.pad(x, (lwpad, rwpad, lhpad, rhpad, 0, 0, 0, 0 ))
     return x
 
@@ -154,10 +155,10 @@ class UNetResNetV1(nn.Module):
         self.bottleneck_channels = interface_channels // self.network.expansion
         self.interface = UpLayer(interface_channels, self.bottleneck_channels)
         self.up_layers = nn.ModuleList([
-            UpResBlock(skip_channels[-1] + self.bottleneck_channels // 2, up_channels[0]),
-            UpResBlock(skip_channels[-2] + up_channels[0] // 2, up_channels[1]),
-            UpResBlock(skip_channels[-3] + up_channels[1] // 2, up_channels[2]),
-            UpResBlock(skip_channels[-4] + up_channels[2] // 2, up_channels[3])
+            UpLayer(skip_channels[-1] + self.bottleneck_channels // 2, up_channels[0]),
+            UpLayer(skip_channels[-2] + up_channels[0] // 2, up_channels[1]),
+            UpLayer(skip_channels[-3] + up_channels[1] // 2, up_channels[2]),
+            UpLayer(skip_channels[-4] + up_channels[2] // 2, up_channels[3])
         ])
         self.conv_classes = nn.Conv2d(up_channels[3] // 2, n_classes, kernel_size=1)
 
@@ -192,7 +193,9 @@ class UNetResNetV1(nn.Module):
         return scores
 
 
-def unet_resnet(resnet_model_fn, in_channels, n_classes, pretrained=True, **kwargs):
+def unet_resnet(
+        resnet_model_fn, in_channels, n_classes, pretrained=True,
+        up_channels=[512, 256, 128, 64], **kwargs):
     net = resnet_model_fn(
         in_channels=in_channels, output_stride=32, pretrained=pretrained,
         **kwargs)
@@ -200,7 +203,7 @@ def unet_resnet(resnet_model_fn, in_channels, n_classes, pretrained=True, **kwar
         n_classes=n_classes, network=net,
         skip_channels=[64, 64, 512, 1024],
         interface_channels=2048,
-        up_channels=[1024, 512, 256, 128]
+        up_channels=upchannels
         )
 
 
@@ -210,3 +213,8 @@ def unet_resnet101(*args, **kwargs):
 
 def unet_resnet152(*args, **kwargs):
     return unet_resnet(resnet152, *args, **kwargs)
+
+def unet_big_resnet101(*args, **kwargs):
+    return unet_resnet(
+        resnet101, *args, up_channels=[1024, 256, 128, 64], **kwargs)
+
