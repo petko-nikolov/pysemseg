@@ -203,7 +203,7 @@ def unet_resnet(
         n_classes=n_classes, network=net,
         skip_channels=[64, 64, 512, 1024],
         interface_channels=2048,
-        up_channels=upchannels
+        up_channels=up_channels
         )
 
 

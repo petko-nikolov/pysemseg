@@ -138,11 +138,17 @@ class FCDenseNet(nn.Module):
         )
 
     def _maybe_pad(self, x, size):
-        hpad = size[0] - x.shape[2]
-        wpad = size[1] - x.shape[3]
+        hpad = max(size[0] - x.shape[2], 0)
+        wpad = max(size[1] - x.shape[3], 0)
         if hpad + wpad > 0:
-            x = F.pad(x, (0, wpad, 0, hpad, 0, 0, 0, 0 ))
+            lhpad = hpad // 2
+            rhpad = hpad // 2 + hpad % 2
+            lwpad = wpad // 2
+            rwpad = wpad // 2 + wpad % 2
+
+            x = F.pad(x, (lwpad, rwpad, lhpad, rhpad, 0, 0, 0, 0 ))
         return x
+
 
 
     def forward(self, x):

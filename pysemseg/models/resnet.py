@@ -142,12 +142,12 @@ def resnet(layers, pretrained_model=None, in_channels=3, output_stride=16,
     if output_stride == 8:
         rate3 = [2] * layers[2]
         stride3 = 1
-        rate4 = [rate3 * 2 * mg for mg in multi_grid]
+        rate4 = [2 * 2 * mg for mg in multi_grid]
         stride4 = 1
     elif output_stride == 16:
         rate3 = [1] * layers[2]
         stride3 = 2
-        rate4 = [rate3 * 2 * mg for mg in multi_grid]
+        rate4 = [2 * mg for mg in multi_grid]
         stride4 = 1
     elif output_stride == 32:
         rate3 = [1] * layers[2]

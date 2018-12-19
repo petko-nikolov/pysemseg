@@ -125,8 +125,8 @@ def train_epoch(
         data , target = Variable(data.to(device)), Variable(target.to(device))
         output = model(data)
         loss = criterion(output, target)
-        num_targets = torch.sum(target != ignore_index).float().to(device)
-        loss = loss / num_targets
+        num_targets = torch.sum(target != ignore_index).float()
+        loss = loss / (num_targets * accumulate_steps)
         loss.backward()
 
         if step % accumulate_steps == 0:
@@ -137,7 +137,8 @@ def train_epoch(
         predictions = torch.argmax(output, dim=1)
 
         predictions, target, loss = (
-            predictions.detach(), target.detach(), loss.detach()
+            predictions.detach(), target.detach(),
+            (loss * accumulate_steps).detach()
         )
 
         metrics.add(predictions, target, loss)
@@ -145,7 +146,7 @@ def train_epoch(
 
         if step % (accumulate_steps * log_interval) == 0 and step > 0:
             avg_time = (
-                time.time() - start_time) / (accumulate_steps * log_interval)
+                time.time() - start_time) / log_interval
             start_time = time.time()
             metrics_dict = metrics.metrics()
             metrics_dict['time'] = avg_time
@@ -158,7 +159,7 @@ def train_epoch(
                 ignore_index=ignore_index
             )
 
-        if step % (accumulate_steps * log_images_interval) == 0:
+        if step % (accumulate_steps * log_images_interval) == 0 and step > 0:
             visual_logger.log_prediction_images(
                 step,
                 tensor_to_numpy(data.data),
@@ -174,14 +175,14 @@ def train_epoch(
 
 def _create_data_loaders(
         data_dir, dataset_cls, dataset_args, transformer_cls, transformer_args,
-        train_batch_size, val_batch_size, num_workers):
+        train_batch_size, val_batch_size, num_workers, pin_memory=False):
     train_dataset = datasets.create_dataset(
         data_dir, dataset_cls, dataset_args,
         transformer_cls, transformer_args, mode='train')
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=train_batch_size,
-        shuffle=True, num_workers=num_workers)
+        shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
 
     validate_dataset = datasets.create_dataset(
         data_dir, dataset_cls, dataset_args,
@@ -189,7 +190,7 @@ def _create_data_loaders(
 
     validate_loader = torch.utils.data.DataLoader(
         validate_dataset, batch_size=val_batch_size,
-        shuffle=False, num_workers=num_workers)
+        shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
 
     return train_loader, validate_loader
 
@@ -230,7 +231,7 @@ def train(args):
     train_loader, validate_loader = _create_data_loaders(
         args.data_dir, dataset_cls, args.dataset_args, transformer_cls,
         args.transformer_args, args.max_gpu_batch_size,
-        args.test_batch_size, args.num_workers
+        args.test_batch_size, args.num_workers, pin_memory=args.cuda and False
     )
 
     visual_logger = VisdomLogger(
@@ -306,6 +307,7 @@ def main():
     parser = define_args()
     args = parser.parse_args()
     train(args)
+    # cProfile.runctx('train(args)', globals(), locals(), 'asd.prof')
 
 
 if __name__ == '__main__':

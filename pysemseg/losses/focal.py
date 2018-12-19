@@ -4,9 +4,10 @@ import torch.nn.functional as F
 
 def one_hot_encode(targets, N):
     targets = targets.unsqueeze(1)
-    one_hot = torch.FloatTensor(
-        targets.size(0), N, targets.size(2), targets.size(3)).zero_().to(
-            targets.device)
+    one_hot = torch.zeros(
+        (targets.size(0), N, targets.size(2), targets.size(3)),
+        device=targets.device
+    )
     one_hot = one_hot.scatter_(1, targets.data, 1)
     one_hot = torch.autograd.Variable(one_hot)
     return one_hot
