@@ -122,7 +122,7 @@ def train_epoch(
 
     start_time = time.time()
     for step, (ids, data, target) in enumerate(loader):
-        data , target = Variable(data.to(device)), Variable(target.to(device))
+        data , target = Variable(data.to(device)), Variable(target.to(device, non_blocking=True))
         output = model(data)
         loss = criterion(output, target)
         num_targets = torch.sum(target != ignore_index).float()
@@ -231,7 +231,7 @@ def train(args):
     train_loader, validate_loader = _create_data_loaders(
         args.data_dir, dataset_cls, args.dataset_args, transformer_cls,
         args.transformer_args, args.max_gpu_batch_size,
-        args.test_batch_size, args.num_workers, pin_memory=args.cuda and False
+        args.test_batch_size, args.num_workers, pin_memory=args.cuda
     )
 
     visual_logger = VisdomLogger(
