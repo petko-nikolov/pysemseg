@@ -176,9 +176,10 @@ class PascalVOCTransform:
         ])
 
     def __call__(self, image, target):
+        image = self.image_loader(image)
         if self.mode == 'train':
-            image = self.image_augmentations(image)
             image, target = self.joint_augmentations(image, target)
+            image = self.image_augmentations(image)
         image = self.tensor_transforms(image)
         target = transforms.ToCategoryTensor()(target)
         return image, target
