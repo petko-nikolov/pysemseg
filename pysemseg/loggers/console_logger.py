@@ -4,12 +4,16 @@ from pysemseg.utils import flatten_dict
 
 class ConsoleLogger():
 
-    def __init__(self, filename=None):
+    def __init__(self, filename=None, continue_training=False):
         self.filename = filename
         self.log_file = None
+        self.continue_training = continue_training
 
     def __enter__(self):
-        self.log_file = open(self.filename, 'w')
+        mode = 'w'
+        if self.continue_training:
+            mode += 'a'
+        self.log_file = open(self.filename, mode)
         return self
 
     def __exit__(self, *args, **kwargs):
