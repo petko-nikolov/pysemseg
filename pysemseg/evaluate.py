@@ -13,7 +13,8 @@ def evaluate(
     metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=loader.dataset.ignore_index
+        ignore_index=loader.dataset.ignore_index,
+        device=device
     )
 
     with torch.no_grad():

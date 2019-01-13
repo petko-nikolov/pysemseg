@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from pysemseg.utils import tensor_to_numpy
 
 def _apply(fcn, acc, counter):
     result = {}
@@ -31,112 +32,97 @@ class _Accumulator():
 
 class SegmentationMetrics:
     def __init__(self, num_classes, labels=None, ignore_index=-1):
-        self.labels = dict(enumerate(labels)) if labels else {}
+        labels = labels or list(range(num_classes))
+        self.labels = dict(enumerate(labels))
         self.accumulator = _Accumulator()
         self.num_classes = num_classes
+        self.cm = np.zeros(
+            (self.num_classes, self.num_classes), dtype=np.int32)
         self.ignore_index = ignore_index
 
 
     def metrics(self):
-        metrics = self.accumulator.mean()
-        metrics['mIOU'] = np.mean(
-            [c['iou'] for _, c in metrics['class'].items()]
-        )
+        metrics = {}
+        metrics['accuracy'] = self._accuracy()
+        metrics['class'] = {}
+        metrics['class']['iou'] = dict(zip(self.labels, self._iou()))
+        metrics['mIOU'] = np.mean(list(metrics['class']['iou'].values()))
         return metrics
 
-    def _accuracy(self, outputs, targets):
-        mask = (targets != self.ignore_index)
-        num = np.sum(np.logical_and(outputs == targets, mask))
-        denom = np.sum(mask)
-        return num, denom
+    def _accuracy(self):
+        return self.cm.diagonal().sum() / self.cm.sum()
 
-    def _recall(self, outputs, targets):
-        matches = (outputs == targets)
-        return [
-            (np.sum(matches[targets == i]), np.sum(targets == i))
-            for i in range(self.num_classes)
-        ]
+    def _iou(self):
+        colsum = self.cm.sum(axis=0)
+        rowsum = self.cm.sum(axis=1)
+        diag = self.cm.diagonal()
+        return diag / (colsum + rowsum - diag)
 
-    def _precision(self, outputs, targets):
-        mask = (targets != self.ignore_index)
-        matches = (outputs == targets)
-        return [(np.sum(matches[np.logical_and(outputs == i, mask)]),
-                 np.sum(np.logical_and(outputs == i, mask)))
-                for i in range(self.num_classes)]
-
-    def _iou(self, outputs, targets):
+    def _confusion_matrix(self, outputs, targets):
+        outputs = outputs.reshape(-1,)
+        targets = targets.reshape(-1,)
         mask = targets != self.ignore_index
-        matches = (outputs == targets)
-        return [
-            (np.sum(matches[targets == i]),
-             np.sum(
-                 np.logical_and(
-                     np.logical_or(outputs == i, targets == i),
-                     mask)))
-            for i in range(self.num_classes)
-        ]
+        comb = self.num_classes * outputs[mask] + targets[mask]
+        comb = np.bincount(comb, minlength=self.num_classes ** 2)
+        return comb.reshape(self.num_classes, self.num_classes)
+
 
     def add(self, outputs, targets, loss):
-        metrics = {'loss': (loss, 1)}
-        metrics['accuracy'] = self._accuracy(outputs, targets)
-        recall = self._recall(outputs, targets)
-        precision = self._precision(outputs, targets)
-        iou = self._iou(outputs, targets)
-        metrics['class'] = {
-            self.labels.get(i, i): {
-                'iou': iou[i],
-            }
-            for i in range(self.num_classes)}
-        self.accumulator.update(metrics)
+        self.accumulator.update({'loss': (loss, 1)})
+        self.cm += self._confusion_matrix(outputs, targets)
 
 
 class TorchSegmentationMetrics:
-    def __init__(self, num_classes, labels=None, ignore_index=-1):
-        self.labels = dict(enumerate(labels)) if labels else {}
+    def __init__(self, num_classes, labels=None, ignore_index=-1, device=None):
+        labels = labels or list(range(num_classes))
+        self.labels = dict(enumerate(labels))
         self.accumulator = _Accumulator()
         self.num_classes = num_classes
+        self.cm = torch.zeros(
+            (self.num_classes, self.num_classes), dtype=torch.long,
+            requires_grad=False, device=device)
         self.ignore_index = ignore_index
 
+
     def metrics(self):
-        metrics = self.accumulator.mean()
+        metrics = {}
+        metrics['accuracy'] = self._accuracy()
+        metrics['class'] = {
+            k: {'iou': v}
+            for k, v in zip(self.labels, self._iou())
+        }
+        metrics['mIOU'] = np.mean([c['iou'] for c in metrics['class'].values()])
+        metrics.update(self.accumulator.mean())
         metrics = _apply(
             lambda x, y: float(x),
             metrics,
             {}
         )
-        metrics['mIOU'] = sum(
-            [c['iou'] for _, c in metrics['class'].items()]
-        ) / self.num_classes
         return metrics
 
-    def _accuracy(self, outputs, targets):
-        mask = (targets != self.ignore_index)
-        num = torch.sum(outputs == targets).float()
-        denom = torch.sum(mask)
-        return num, denom
+    def _accuracy(self):
+        accuracy = self.cm.diagonal().sum().float() / self.cm.sum().float()
+        return tensor_to_numpy(accuracy)
 
-    def _iou(self, outputs, targets):
-        mask = (targets != self.ignore_index).float()
-        matches = (outputs == targets).float()
-        ious = []
-        for i in range(self.num_classes):
-            num = (matches * (targets == i).float()).sum()
-            union = (outputs == i).float() + (targets == i).float()
-            intersection = (outputs == i).float() * (targets == i).float()
-            denom = (mask * (union - intersection)).sum()
-            ious.append((num, denom))
-        return ious
+    def _iou(self):
+        colsum = self.cm.sum(dim=0)
+        rowsum = self.cm.sum(dim=1)
+        diag = self.cm.diagonal()
+        iou = diag.float() / (colsum + rowsum - diag).float()
+        return tensor_to_numpy(iou)
+
+    def _confusion_matrix(self, outputs, targets):
+        outputs = outputs.view(-1).contiguous()
+        targets = targets.view(-1).contiguous()
+        mask = (targets != self.ignore_index)
+        comb = self.num_classes * outputs[mask] + targets[mask]
+        comb = torch.bincount(comb, minlength=self.num_classes ** 2)
+        return comb.reshape(self.num_classes, self.num_classes).long()
+
 
     def add(self, outputs, targets, loss):
-        metrics = {'loss': (loss, 1)}
-        metrics['accuracy'] = self._accuracy(outputs, targets)
-        iou = self._iou(outputs, targets)
-        metrics['class'] = {
-            self.labels.get(i, i): {
-                'iou': iou[i],
-            }
-            for i in range(self.num_classes)}
-        self.accumulator.update(metrics)
+        self.accumulator.update({'loss': (loss, 1)})
+        self.cm += self._confusion_matrix(outputs, targets)
 
 
 def compute_example_segmentation_metrics(
@@ -144,4 +130,3 @@ def compute_example_segmentation_metrics(
     metrics = TorchSegmentationMetrics(n_classes, ignore_index)
     metrics.add(outputs, targets, loss)
     return metrics.metrics()
-

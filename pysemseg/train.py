@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from pysemseg import datasets
-from pysemseg.metrics import TorchSegmentationMetrics
+from pysemseg.metrics import SegmentationMetrics, TorchSegmentationMetrics
 from pysemseg.loggers import TensorboardLogger, VisdomLogger, ConsoleLogger
 from pysemseg.evaluate import evaluate
 from pysemseg.utils import (
@@ -92,6 +92,8 @@ def define_args():
     parser.add_argument('--save-model-frequency', type=int,
                         required=False, default=5,
                         help='Save model checkpoint every nth epoch.')
+    parser.add_argument('--profile', type=str, required=False,
+                        help='Runs a profiler and saves the results in a file.')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--allow-missing-keys', action='store_true', default=False,
                         help='Whether to allow module keys to differ from checkpoint keys'
@@ -112,12 +114,14 @@ def train_epoch(
     metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=ignore_index
+        ignore_index=ignore_index,
+        device=device
     )
     epoch_metrics = TorchSegmentationMetrics(
         loader.dataset.number_of_classes,
         loader.dataset.labels,
-        ignore_index=ignore_index
+        ignore_index=ignore_index,
+        device=device
     )
 
     start_time = time.time()
@@ -156,7 +160,8 @@ def train_epoch(
             metrics = TorchSegmentationMetrics(
                 loader.dataset.number_of_classes,
                 loader.dataset.labels,
-                ignore_index=ignore_index
+                ignore_index=ignore_index,
+                device=device
             )
 
         if step % (accumulate_steps * log_images_interval) == 0 and step > 0:
@@ -306,8 +311,10 @@ def main():
     sys.path.append('./')
     parser = define_args()
     args = parser.parse_args()
-    train(args)
-    # cProfile.runctx('train(args)', globals(), locals(), 'asd.prof')
+    if args.profile is not None:
+        cProfile.runctx('train(args)', globals(), locals(), args.profile)
+    else:
+        train(args)
 
 
 if __name__ == '__main__':
