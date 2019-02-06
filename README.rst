@@ -96,7 +96,7 @@ To use a checkpoint for inference you have to call :code:`load_model` with a che
 
 .. code:: python
 
-   imoprt torch.nn.functional as F
+   import torch.nn.functional as F
    from pysemseg.transforms import CV2ImageLoader
    from pysemseg.utils import load_model
    from pysemseg.models import VGGFCN32
