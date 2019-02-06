@@ -88,3 +88,27 @@ or pass a YAML config
     lr-scheduler-args:
         max_epochs: 40
         gamma: 0.8
+
+Load and predict with a trained model
+=====================================
+
+To use a checkpoint for inference you have to call :code:`load_model` with a checkpoint, the model class and the transformer class used during training.
+
+.. code:: python
+
+   imoprt torch.nn.functional as F
+   from pysemseg.transforms import CV2ImageLoader
+   from pysemseg.utils import load_model
+   from pysemseg.models import VGGFCN32
+   from pysemseg.datasets import PascalVOCTransform
+   
+   model = load_model(
+       './checkpoint_path', 
+       VGGFCN32, 
+       PascalVOCTransform
+   )
+   
+   image = CV2ImageLoader()('./image_path')
+   logits = model(image)
+   probabilities = F.softmax(logits, dim=1)
+   predictions = torch.argmax(logits, dim=1)
