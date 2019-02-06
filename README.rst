@@ -14,7 +14,7 @@ Using pip:
  
 .. code:: bash
 
-  pip  git+https://github.com/petko-nikolov/pysemseg
+  pip install git+https://github.com/petko-nikolov/pysemseg
     
    
 Models
