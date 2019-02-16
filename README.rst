@@ -26,6 +26,7 @@ Models
 - DeepLab V3 [`paper <https://arxiv.org/pdf/1706.05587.pdf>`_] - Multi-grid, ASPP and BatchNorm fine-tuning with pre-trained resnets backbone
 - DeepLab V3+ [`paper <https://arxiv.org/pdf/1802.02611.pdf>`_]
 - RefineNet [`paper <https://arxiv.org/pdf/1611.06612.pdf>`_] - [Upcoming ...]
+- PSPNet [`paper <https://arxiv.org/abs/1612.01105>`_] - [Upcoming ...]
 
 
 Datasets
